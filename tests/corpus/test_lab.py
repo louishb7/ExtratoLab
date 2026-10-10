@@ -24,11 +24,11 @@ FORBIDDEN = ("PESSOA FICTICIA PRIVACIDADE", "000.000.000-00", "DEMO-987654321",
 
 
 def records(path):
-    return [json.loads(line) for line in path.read_text().splitlines()]
+    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
 
 
 def write_entries(path, entries):
-    path.write_text("".join(json.dumps(entry) + "\n" for entry in entries))
+    path.write_text("".join(json.dumps(entry) + "\n" for entry in entries), encoding="utf-8")
 
 
 def test_actual_batch_verdicts_deduplication_and_continuation(corpus_manifest, tmp_path):
@@ -71,7 +71,7 @@ def test_fingerprint_observes_existing_engine_counts_and_provenance(corpus_manif
 
 
 def test_reports_never_copy_financial_contents_or_manifest_metadata(corpus_manifest, tmp_path, capsys):
-    entry = json.loads(corpus_manifest.read_text().splitlines()[0])
+    entry = json.loads(corpus_manifest.read_text(encoding="utf-8").splitlines()[0])
     entry.update(corpus_id="PESSOA FICTICIA PRIVACIDADE", source_url="https://private.invalid/DEMO-987654321",
                  notes="DESCRICAO FICTICIA CONFIDENCIAL 731,42", retrieved_at="2028-08-05")
     write_entries(corpus_manifest, [entry])
@@ -80,12 +80,12 @@ def test_reports_never_copy_financial_contents_or_manifest_metadata(corpus_manif
     assert main(["corpus", "report", str(output)]) == 0
     assert main(["corpus", "report", str(output), "--json"]) == 0
     captured = capsys.readouterr()
-    all_output = output.read_text() + captured.out + captured.err
+    all_output = output.read_text(encoding="utf-8") + captured.out + captured.err
     for secret in FORBIDDEN + (str(corpus_manifest), "private.invalid"):
         assert secret not in all_output
     assert records(output)[0]["corpus_id_hash"] == hashlib.sha256(entry["corpus_id"].encode()).hexdigest()
-    assert "source_url" not in output.read_text()
-    assert "local_path" not in output.read_text()
+    assert "source_url" not in output.read_text(encoding="utf-8")
+    assert "local_path" not in output.read_text(encoding="utf-8")
 
 
 def test_aggregate_groups_by_structure_counts_unique_documents_and_builds_matrix(corpus_manifest, tmp_path):
@@ -114,13 +114,13 @@ def test_signatures_and_aggregate_are_deterministic_while_duration_is_separate(c
     assert one == two
     expected = aggregate_report(first)
     assert aggregate_report(second) == expected
-    second.write_text("\n".join(reversed(first.read_text().splitlines())) + "\n")
+    second.write_text("\n".join(reversed(first.read_text(encoding="utf-8").splitlines())) + "\n", encoding="utf-8")
     assert aggregate_report(second) == expected
     assert render_report(aggregate_report(second)) == render_report(expected)
 
 
 def test_different_institution_metadata_does_not_change_engine_or_grouping(corpus_manifest, tmp_path):
-    entries = [json.loads(line) for line in corpus_manifest.read_text().splitlines()]
+    entries = [json.loads(line) for line in corpus_manifest.read_text(encoding="utf-8").splitlines()]
     first = tmp_path / "first.jsonl"
     analyze_corpus(corpus_manifest, first)
     for entry in entries:
@@ -133,8 +133,8 @@ def test_different_institution_metadata_does_not_change_engine_or_grouping(corpu
 
 
 def test_unexpected_engine_exception_is_sanitized_and_next_document_runs(corpus_manifest, tmp_path):
-    entry = json.loads(corpus_manifest.read_text().splitlines()[1])
-    with corpus_manifest.open("a") as manifest:
+    entry = json.loads(corpus_manifest.read_text(encoding="utf-8").splitlines()[1])
+    with corpus_manifest.open("a", encoding="utf-8") as manifest:
         manifest.write(json.dumps(entry) + "\n")
     def failing_engine(path):
         if path.stem == "unsupported":
@@ -152,7 +152,7 @@ def test_unexpected_engine_exception_is_sanitized_and_next_document_runs(corpus_
     assert result[-1]["duplicate_of"] == 2
     assert aggregate_report(output)["duplicates"] == 2
     for secret in FORBIDDEN:
-        assert secret not in output.read_text()
+        assert secret not in output.read_text(encoding="utf-8")
 
 
 def test_optional_observer_failure_preserves_the_engine_verdict(corpus_manifest, tmp_path):
@@ -163,7 +163,7 @@ def test_optional_observer_failure_preserves_the_engine_verdict(corpus_manifest,
     assert summary.input_errors == 1
     assert result[0]["fingerprint"]["analysis_status"] == "success"
     assert result[0]["fingerprint"]["observation_errors"] == ["observation_error"]
-    assert "DESCRICAO FICTICIA CONFIDENCIAL" not in output.read_text()
+    assert "DESCRICAO FICTICIA CONFIDENCIAL" not in output.read_text(encoding="utf-8")
 
 
 def test_unknown_engine_labels_are_hashed_not_printed(corpus_manifest, tmp_path):
@@ -174,13 +174,13 @@ def test_unknown_engine_labels_are_hashed_not_printed(corpus_manifest, tmp_path)
     output = tmp_path / "report.jsonl"
     with patch("pdf_to_ofx.corpus.batch.analyze_pdf", return_value=injected):
         analyze_corpus(corpus_manifest, output)
-    assert private not in output.read_text()
+    assert private not in output.read_text(encoding="utf-8")
     assert private not in render_report(aggregate_report(output))
-    assert "unknown_" in output.read_text()
+    assert "unknown_" in output.read_text(encoding="utf-8")
 
 
 def test_invalid_manifest_lines_and_hash_mismatch_do_not_stop_the_batch(corpus_manifest, tmp_path):
-    good = json.loads(corpus_manifest.read_text().splitlines()[0])
+    good = json.loads(corpus_manifest.read_text(encoding="utf-8").splitlines()[0])
     wrong_hash = {**good, "sha256": "0" * 64}
     missing_path = {"schema_version": 1, "local_path": None}
     invalid_path = {"schema_version": 1, "local_path": "\u0000PRIVATE_PATH"}
@@ -194,11 +194,11 @@ def test_invalid_manifest_lines_and_hash_mismatch_do_not_stop_the_batch(corpus_m
         "manifest_invalid", "manifest_invalid", "manifest_invalid", "hash_mismatch", "path_missing", "path_invalid", None,
     ]
     assert records(output)[-1]["fingerprint"]["analysis_status"] == "success"
-    assert "PRIVATE_PATH" not in output.read_text()
+    assert "PRIVATE_PATH" not in output.read_text(encoding="utf-8")
 
 
 def test_supplied_hash_is_verified_instead_of_used_as_dedup_key(corpus_manifest, tmp_path):
-    entry = json.loads(corpus_manifest.read_text().splitlines()[0])
+    entry = json.loads(corpus_manifest.read_text(encoding="utf-8").splitlines()[0])
     path = corpus_manifest.parent / entry["local_path"]
     entry["sha256"] = file_sha256(path).upper()
     write_entries(corpus_manifest, [entry, entry])
@@ -219,7 +219,7 @@ def test_aggregate_ignores_extra_metadata_and_sanitizes_untrusted_labels(corpus_
     data[1]["fingerprint"]["blocking_capabilities"] = [secret]
     data[1]["fingerprint"]["failure_stage"] = secret
     write_entries(output, data)
-    output.write_text(output.read_text() + 'not JSON\n{"schema_version":2}\n')
+    output.write_text(output.read_text(encoding="utf-8") + 'not JSON\n{"schema_version":2}\n', encoding="utf-8")
     report = aggregate_report(output)
     assert report["input_errors"] == {"file_missing": 1, "report_invalid": 2}
     assert secret not in json.dumps(report)
@@ -265,9 +265,16 @@ def test_report_cannot_replace_manifest_or_document(corpus_manifest, tmp_path):
     protected = tmp_path / "document.jsonl"
     protected.write_bytes((corpus_manifest.parent.parent / "raw/success.pdf").read_bytes())
     document_bytes = protected.read_bytes()
-    alias = tmp_path / "alias.jsonl"
-    alias.symlink_to(protected)
     write_entries(corpus_manifest, [{"local_path": str(protected)}])
+    with pytest.raises(ValueError):
+        analyze_corpus(corpus_manifest, protected)
+    assert protected.read_bytes() == document_bytes
+    assert not list(tmp_path.glob(".corpus-report-*"))
+    alias = tmp_path / "alias.jsonl"
+    try:
+        alias.symlink_to(protected)
+    except (OSError, NotImplementedError) as exc:
+        pytest.skip(f"Symlink creation not supported in this environment: {exc}")
     with pytest.raises(ValueError):
         analyze_corpus(corpus_manifest, alias)
     assert protected.read_bytes() == document_bytes
@@ -275,7 +282,7 @@ def test_report_cannot_replace_manifest_or_document(corpus_manifest, tmp_path):
 
 
 def test_changed_document_is_not_attached_to_the_preanalysis_hash(corpus_manifest, tmp_path):
-    entry = json.loads(corpus_manifest.read_text().splitlines()[0])
+    entry = json.loads(corpus_manifest.read_text(encoding="utf-8").splitlines()[0])
     write_entries(corpus_manifest, [entry])
     output = tmp_path / "report.jsonl"
     with patch("pdf_to_ofx.corpus.batch.file_sha256", side_effect=["1" * 64, "2" * 64]):

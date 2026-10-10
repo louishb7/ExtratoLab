@@ -2,50 +2,87 @@
 
 ## Product purpose
 
-Convert PDF bank statements into OFX for an accounting office whose downstream
-workflow uses Athenas. Processing must be local and work offline: financial
-documents are confidential. Athenas compatibility requires a future acceptance
-test and must not be claimed from M0's synthetic example.
+**ExtratoLab** is a local desktop application and conversion core (Python + PySide6)
+for interpreting, reviewing, validating, and exporting PDF bank statements into
+deterministic OFX (and future tabular formats) for an accounting office whose
+downstream workflow uses Athenas. Processing must remain 100% local and work
+offline: financial documents are confidential. Athenas compatibility still
+requires a dedicated acceptance test and must not be claimed from synthetic or
+unverified examples.
 
 ## Product principles
 
-- Process financial document contents locally; conversion must not require
-  external servers or third-party APIs.
-- Prefer deterministic parsing to probabilistic guessing. Fail closed whenever
-  financial data is ambiguous; never silently discard malformed transactions.
-- Correctness matters more than conversion rate. Keep parsing and validation
-  inspectable and testable; never invent or silently correct financial data.
+- **Local financial processing:** Process financial document contents locally;
+  analysis, validation, and export must never require external servers,
+  third-party APIs, or telemetry.
+- **Fail-closed financial interpretation:** Prefer deterministic structural
+  interpretation and mathematical proof to probabilistic guessing or scoring.
+  Fail closed (`AMBIGUOUS`, `UNSUPPORTED`, or `INVALID`) whenever financial data
+  is ambiguous, incomplete, or contradictory; never silently discard or invent
+  transactions or balances.
+- **Structure-based generic engine:** The engine interprets financial structures
+  (visual rows, monetary domains, structural operators, bounded hypotheses, and
+  independent control intervals), not institution-specific parsers as an
+  expansion strategy.
+- **Banks are sampling sources:** Banking institutions serve as sampling sources
+  for structural diversity in Corpus Lab, never as parser boundaries or routing
+  keys for generic interpretation.
+- **Evidence-driven evolution:** New capabilities must be guided by concrete
+  document diagnostics, structural evidence, and reproducible synthetic
+  regression fixtures rather than speculative bank-specific heuristics.
+- **Cross-platform support:** Compatibility with both **Linux** and **Windows**
+  from a single Python/PySide6 codebase is mandatory.
 
 ## Architecture rules
 
-- Keep the conversion core independent of the future GUI. UI code must never
-  contain bank parsing logic.
-- Isolate PDF-library calls behind our own extraction module and document model.
-  Isolate each bank/layout parser from other parsers.
-- Generate OFX from normalized domain models and validate before successful
-  export. Use `Decimal` for monetary values, never binary floating point.
+- Keep the analysis, validation, and export core (`pdf/`, `domain/`, `generic/`,
+  `validation/`, `ofx/`, `application/`, `corpus/`) independent of the GUI
+  (`ui/`). UI code must never contain parsing, hypothesis, or financial
+  reconciliation logic.
+- Isolate PDF-library calls behind `pdf/extractor.py` and our own immutable
+  document model (`ExtractedDocument`, `ExtractedPage`, `Word`).
+- Preserve legacy recognized oracles (`SyntheticBankParser`, `InterParser`, and
+  legacy M4/M5/M7 paths) for regression verification and FITID stability, while
+  expanding coverage exclusively through generic structural operators and
+  bounded hypothesis composition.
+- Preserve existing FITID generation and financial export semantics; never alter
+  FITID algorithms, canonical ordering, or financial behavior without explicit
+  justification, migration planning, and regression tests.
+- Generate exports from normalized domain models and validate both statement
+  invariants and export readiness before publishing. Use `Decimal` for monetary
+  values, never binary floating point (`float`).
 - Avoid unnecessary persistence; no database without a concrete requirement.
-- No OCR until digitally generated PDFs work reliably. No premature frameworks
-  or abstractions for hypothetical requirements.
+- No OCR until digitally generated PDFs and the desktop review workflow are
+  complete and authorized. Avoid premature frameworks or speculative abstractions.
 - Keep dependencies minimal and justify additions.
 
 ## Privacy and logging rules
 
 - Never commit real client bank statements or upload private financial fixtures.
-- `tests/private_fixtures/` is local-only and must remain ignored by Git.
+- `tests/private_fixtures/` and `.corpus/` are local-only and must remain
+  ignored by Git.
 - Committed fixtures must contain synthetic/fictitious data only.
-- Do not persist raw transaction contents in logs. Avoid printing transaction
-  descriptions unless explicitly needed for local debugging.
-- Error messages should identify the failure without reproducing document text.
+- Do not persist raw transaction contents in logs or diagnostic reports. Avoid
+  printing transaction descriptions, account numbers, or private paths unless
+  explicitly requested for local interactive debugging.
+- Error messages and batch diagnostics should identify the failure stage and
+  blocking capabilities without reproducing confidential document text.
 
-## Testing rules
+## Testing and portability rules
 
-- Parser behavior must be testable without a GUI. Each supported bank/layout
-  should have dedicated fixtures and regression tests.
-- Add regression tests for parser bugs whenever practical.
-- Test success and failure paths. Validation failures must prevent export.
-- Verify M0 through the actual synthetic PDF, extraction, parsing, validation,
-  and OFX generation, plus a CLI run.
+- Core analysis, diagnosis, Corpus Lab, and export behavior must be testable
+  without a graphical display; UI tests must run cleanly under
+  `QT_QPA_PLATFORM=offscreen`.
+- Specify explicit text encodings (`encoding="utf-8"` or `encoding="ascii"` as
+  appropriate) on all text file read/write operations so tests and tools behave
+  identically on Linux (UTF-8 default) and Windows (`cp1252` legacy default).
+- Guard OS-dependent test setup (such as symbolic link creation on Windows
+  environments without Developer Mode or elevated privileges) with conditional
+  skips only around the unsupported OS precondition, never masking real
+  implementation failures.
+- Each supported structural capability must have dedicated synthetic fixtures
+  and regression tests covering both success and failure/abstention paths.
+  Validation or readiness failures must prevent export.
 
 ## Development rules
 
@@ -54,9 +91,7 @@ test and must not be claimed from M0's synthetic example.
   Prefer the standard library when sufficient and use `pathlib` for paths.
 - Never use `float` for money. Keep signed amounts: positive is inflow/credit,
   negative is outflow/debit.
-- Do not introduce GUI code during M0. Do not add servers, telemetry, network
-  calls, OCR, real bank parsers, or packaging for a desktop installer during M0.
-- Do not automatically commit or push changes.
+- Do not automatically commit or push changes without explicit user authorization.
 
 ## Final task review requirement
 

@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: Python ${{ matrix.python-version }} (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.12"]
+
+    env:
+      QT_QPA_PLATFORM: offscreen
+      PYTHONUTF8: "1"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install project and test dependencies
+        run: python -m pip install -e ".[test]"
+
+      - name: Compile source, tests, and tools
+        run: python -m compileall -q src tests tools
+
+      - name: Run full pytest suite
+        run: python -m pytest
+
+      - name: Run offscreen UI test suite
+        run: python -m pytest tests/ui -q

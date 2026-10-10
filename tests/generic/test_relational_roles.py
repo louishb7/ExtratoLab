@@ -33,10 +33,10 @@ def relational_document(write_layout_pdf, tmp_path):
 
 
 def modified_document(write_layout_pdf, tmp_path, change):
-    recipe = json.loads(RECIPE.read_text())
+    recipe = json.loads(RECIPE.read_text(encoding='utf-8'))
     change(recipe['pages'][0])
     path = tmp_path / 'modified.json'
-    path.write_text(json.dumps(recipe))
+    path.write_text(json.dumps(recipe), encoding='utf-8')
     write_layout_pdf(path, tmp_path / 'modified.pdf')
     return extract_pdf(tmp_path / 'modified.pdf')
 

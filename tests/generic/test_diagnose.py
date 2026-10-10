@@ -66,13 +66,13 @@ def test_missing_pdf_diagnosis_does_not_expose_path(tmp_path, capsys):
 def test_diagnosis_distinguishes_presearch_failure_from_eliminated_hypotheses(
     tmp_path, write_layout_pdf, failure,
 ):
-    recipe = json.loads((LAYOUTS / "wrapped_description_separators/pages.json").read_text())
+    recipe = json.loads((LAYOUTS / "wrapped_description_separators/pages.json").read_text(encoding="utf-8"))
     if failure == "inventory":
         recipe["pages"][0][7]["cells"][1][1] = "UNPROVEN REFERENCE -"
     else:
         recipe["pages"][0][6]["cells"][2][1] = "+17,24"
     source = tmp_path / "recipe.json"
-    source.write_text(json.dumps(recipe))
+    source.write_text(json.dumps(recipe), encoding="utf-8")
     pdf = tmp_path / "fictitious.pdf"
     write_layout_pdf(source, pdf)
     report = diagnose_pdf(pdf)

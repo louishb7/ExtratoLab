@@ -34,10 +34,10 @@ def flow_pdf(write_layout_pdf, tmp_path):
 @pytest.fixture
 def changed_document(write_layout_pdf, tmp_path):
     def build(change):
-        recipe = json.loads(RECIPE.read_text())
+        recipe = json.loads(RECIPE.read_text(encoding="utf-8"))
         change(recipe["pages"])
         source, pdf = tmp_path / "recipe.json", tmp_path / "changed.pdf"
-        source.write_text(json.dumps(recipe, ensure_ascii=False))
+        source.write_text(json.dumps(recipe, ensure_ascii=False), encoding="utf-8")
         write_layout_pdf(source, pdf)
         return extract_pdf(pdf)
     return build

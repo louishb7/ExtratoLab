@@ -65,21 +65,38 @@ testing is still required before real use.
 
 ## Setup and verification
 
-Python 3.12 or newer is required. On Debian/Ubuntu, install the matching
-`python3-venv` system package if Python reports that `ensurepip` is missing.
+Python 3.12 or newer is required on both **Linux** and **Windows**. On Debian/Ubuntu,
+install the matching `python3-venv` system package if Python reports that
+`ensurepip` is missing.
+
+### Linux (Bash)
 
 ```bash
 python3.12 -m venv .venv
 source .venv/bin/activate
-python -m pip install -e '.[test]'
+python -m pip install -e ".[test]"
+python -m compileall -q src tests tools
 python -m pytest
 pdf-to-ofx-gui
 pdf-to-ofx tests/fixtures/synthetic/statement.pdf -o /tmp/synthetic-statement.ofx
 pdf-to-ofx tests/fixtures/inter/statement.pdf -o /tmp/fictitious-inter.ofx
 ```
 
+### Windows (PowerShell)
+
+```powershell
+py -3.12 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -e ".[test]"
+python -m compileall -q src tests tools
+python -m pytest
+pdf-to-ofx-gui
+pdf-to-ofx tests\fixtures\synthetic\statement.pdf -o "$env:TEMP\synthetic-statement.ofx"
+pdf-to-ofx tests\fixtures\inter\statement.pdf -o "$env:TEMP\fictitious-inter.ofx"
+```
+
 Dependency installation needs package access; conversion itself works offline.
-After updating the checkout, rerun `python -m pip install -e '.[test]'` to install
+After updating the checkout, rerun `python -m pip install -e ".[test]"` to install
 PySide6 and register the desktop entry point. The GUI needs a graphical desktop;
 the CLI remains usable without one.
 On Debian/Ubuntu with X11, Qt also needs the system library `libxcb-cursor0`.
@@ -88,7 +105,7 @@ is missing, install it with `sudo apt install libxcb-cursor0`.
 
 ## Desktop use during development
 
-Start the application with either:
+Start the application on Linux or Windows PowerShell (with the virtual environment activated) using either:
 
 ```bash
 pdf-to-ofx-gui
@@ -128,10 +145,18 @@ Conversion is synchronous in M3: the public one/two-page fixtures took less than
 responsiveness must be reassessed with representative larger inputs before
 distribution. No Windows executable or installer is provided yet.
 
-GUI behavior tests use public fixtures and set `QT_QPA_PLATFORM=offscreen` only
-inside the GUI test environment. No extra Qt test framework or CI is required:
+GUI behavior tests use public fixtures and set `QT_QPA_PLATFORM=offscreen`
+automatically inside `tests/ui/conftest.py`. You can also set the platform
+explicitly when running UI tests:
 
 ```bash
+# Linux (Bash)
+QT_QPA_PLATFORM=offscreen python -m pytest tests/ui -q
+```
+
+```powershell
+# Windows (PowerShell)
+$env:QT_QPA_PLATFORM = "offscreen"
 python -m pytest tests/ui -q
 ```
 
@@ -763,8 +788,16 @@ is still a separate requirement.
 ## Local diagnosis and real-document acceptance
 
 ```bash
+# Linux (Bash)
 pdf-to-ofx diagnose /local/statement.pdf
 QT_QPA_PLATFORM=offscreen python tools/verify_private_acceptance.py /local/first.pdf /local/second.pdf
+```
+
+```powershell
+# Windows (PowerShell)
+pdf-to-ofx diagnose C:\local\statement.pdf
+$env:QT_QPA_PLATFORM = "offscreen"
+python tools\verify_private_acceptance.py C:\local\first.pdf C:\local\second.pdf
 ```
 
 `diagnose` uses `analyze_pdf`, the GUI's normal analysis entry point. Its bounded

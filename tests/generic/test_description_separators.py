@@ -18,11 +18,11 @@ RECIPE = LAYOUTS / "wrapped_description_separators/pages.json"
 
 
 def write_variant(tmp_path, write_layout_pdf, mutate=None):
-    recipe = json.loads(RECIPE.read_text())
+    recipe = json.loads(RECIPE.read_text(encoding="utf-8"))
     if mutate:
         mutate(recipe["pages"][0])
     source = tmp_path / "recipe.json"
-    source.write_text(json.dumps(recipe))
+    source.write_text(json.dumps(recipe), encoding="utf-8")
     pdf = tmp_path / "fictitious.pdf"
     write_layout_pdf(source, pdf)
     return pdf

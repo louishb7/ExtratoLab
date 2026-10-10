@@ -1,2 +1,7 @@
 # Preserve PDF fixtures as binary files; do not normalize their line endings.
 *.pdf binary
+
+# Preserve deterministic LF line endings for OFX references and JSON/JSONL fixtures.
+*.ofx text eol=lf
+*.json text eol=lf
+*.jsonl text eol=lf

@@ -427,9 +427,9 @@ def test_isolated_daily_balance_is_not_a_verified_financial_link(make_document):
 
 def test_both_strong_daily_checkpoints_can_work_without_outer_balances(write_layout_pdf,tmp_path):
     import json
-    recipe=json.loads((LAYOUTS/'daily_checkpoints/pages.json').read_text())
+    recipe=json.loads((LAYOUTS/'daily_checkpoints/pages.json').read_text(encoding='utf-8'))
     recipe['pages'][0]=[row for row in recipe['pages'][0] if row['y'] not in (50,70)]
-    source=tmp_path/'daily.json';source.write_text(json.dumps(recipe))
+    source=tmp_path/'daily.json';source.write_text(json.dumps(recipe),encoding='utf-8')
     path=tmp_path/'daily.pdf';write_layout_pdf(source,path)
     result=infer_layout(extract_pdf(path))
     assert result.status==AnalysisStatus.SUCCESS
@@ -456,9 +456,9 @@ def test_changing_candidate_order_cannot_turn_budget_exhaustion_into_success(mak
 
 def test_unsigned_group_with_extra_monetary_region_abstains_without_crashing(write_layout_pdf,tmp_path):
     import json
-    recipe=json.loads((LAYOUTS/'grouped_subtotals_wrapped/pages.json').read_text())
+    recipe=json.loads((LAYOUTS/'grouped_subtotals_wrapped/pages.json').read_text(encoding='utf-8'))
     recipe['pages'][0][10]['cells'][-1][1]='10,00 1,00'
-    source=tmp_path/'extra.json';source.write_text(json.dumps(recipe))
+    source=tmp_path/'extra.json';source.write_text(json.dumps(recipe),encoding='utf-8')
     path=tmp_path/'extra.pdf';write_layout_pdf(source,path)
     result=infer_layout(extract_pdf(path))
     assert result.status==AnalysisStatus.UNSUPPORTED

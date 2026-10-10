@@ -156,7 +156,10 @@ def test_cli_refuses_output_symlink(synthetic_pdf: Path, tmp_path: Path) -> None
     target = tmp_path / "existing.ofx"
     target.write_text("existing export", encoding="ascii")
     output = tmp_path / "link.ofx"
-    output.symlink_to(target)
+    try:
+        output.symlink_to(target)
+    except (OSError, NotImplementedError) as exc:
+        pytest.skip(f"Symlink creation not supported in this environment: {exc}")
     assert main([str(synthetic_pdf), "-o", str(output)]) == 1
     assert target.read_text(encoding="ascii") == "existing export"
 

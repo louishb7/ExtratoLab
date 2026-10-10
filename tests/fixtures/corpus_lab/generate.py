@@ -17,7 +17,7 @@ def generate_corpus(output: Path) -> Path:
     raw.mkdir(parents=True, exist_ok=True)
     manifests.mkdir(parents=True, exist_ok=True)
     (output / "reports").mkdir(parents=True, exist_ok=True)
-    for name, text in json.loads((fixtures / "documents.json").read_text()).items():
+    for name, text in json.loads((fixtures / "documents.json").read_text(encoding="utf-8")).items():
         canvas = Canvas(str(raw / f"{name}.pdf"), pagesize=(595, 842), invariant=1, pageCompression=0)
         canvas.setTitle("Fictitious Corpus Lab fixture")
         canvas.setAuthor("Synthetic data only")

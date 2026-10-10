@@ -242,7 +242,7 @@ def test_invalid_file_clears_previous_result_before_core_is_called(
     path = tmp_path / "missing.pdf"
     if kind == "wrong_extension":
         path = tmp_path / "wrong.txt"
-        path.write_text("FICTITIOUS")
+        path.write_text("FICTITIOUS", encoding="utf-8")
     elif kind == "directory":
         path = tmp_path / "directory.pdf"
         path.mkdir()
