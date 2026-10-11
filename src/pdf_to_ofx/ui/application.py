@@ -9,7 +9,7 @@ from pdf_to_ofx.ui.main_window import MainWindow
 
 def main(argv: list[str] | None = None) -> int:
     app = QApplication.instance() or QApplication(sys.argv if argv is None else argv)
-    app.setApplicationName("PDF para OFX")
+    app.setApplicationName("ExtratoLab")
     window = MainWindow()
     window.show()
     return app.exec()

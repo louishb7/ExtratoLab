@@ -17,11 +17,12 @@ from pdf_to_ofx.domain.errors import (
 )
 from pdf_to_ofx.ui import application
 from pdf_to_ofx.ui.main_window import MainWindow, format_money
+from tests.ui.waiting import wait_for_analysis
 
 
 def test_window_starts_with_no_exportable_result(window: MainWindow) -> None:
     assert window.isVisible()
-    assert window.windowTitle() == "PDF para OFX"
+    assert window.windowTitle() == "ExtratoLab"
     assert window.selected_file is None
     assert window.conversion_result is None
     assert window.select_button.isEnabled()
@@ -71,6 +72,7 @@ def test_public_conversion_summary_and_read_only_table(
 def test_select_button_uses_pdf_dialog(window: MainWindow, synthetic_pdf: Path) -> None:
     with patch("pdf_to_ofx.ui.main_window.QFileDialog.getOpenFileName", return_value=(str(synthetic_pdf), "")) as dialog:
         window.select_button.click()
+    wait_for_analysis(window)
     assert "*.pdf" in dialog.call_args.args[3]
     assert window.conversion_result == convert_pdf(synthetic_pdf)
 
@@ -295,6 +297,7 @@ def test_single_local_pdf_drop_preserves_source(window: MainWindow, synthetic_pd
     drop = QDropEvent(QPointF(10, 10), Qt.DropAction.CopyAction | Qt.DropAction.MoveAction,
                       mime, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
     window.dropEvent(drop)
+    wait_for_analysis(window)
     assert drop.isAccepted() and drop.dropAction() == Qt.DropAction.CopyAction
     assert window.selected_file == source
     assert window.table.rowCount() == 4
@@ -331,6 +334,7 @@ def test_gui_selection_conversion_and_save_work_without_network(
          patch("pdf_to_ofx.ui.main_window.QFileDialog.getOpenFileName", return_value=(str(inter_pdf), "")), \
          patch("pdf_to_ofx.ui.main_window.QFileDialog.getSaveFileName", return_value=(str(output), "")):
         window.select_button.click()
+        wait_for_analysis(window)
         assert window.table.rowCount() == 5
         window.save_button.click()
         assert output.read_bytes() == convert_pdf(inter_pdf).ofx.encode("ascii")

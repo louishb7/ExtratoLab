@@ -136,3 +136,13 @@ verdict of each kind; one entry is deduplicated and one has `file_missing`.
 The intentional missing file makes the example commands return 1 while still
 producing the complete report. Fixtures contain fictitious privacy sentinels to
 verify that neither diagnostic JSONL nor aggregate/CLI output exposes contents.
+
+
+## Integrated research extension
+
+The V1 workflow above remains supported. Version 2 manifest metadata and
+independently verified expectations extend this same analyzer; see
+[Corpus research protocol](corpus-research.md). Reports retain schema 1 and add a
+content-free evaluation block for V2 entries. Aggregates include independent
+classifications, nullable accuracy metrics and split-leak detection. V1 documents
+without truth are unverified; their SUCCESS verdict is not proof of correctness.

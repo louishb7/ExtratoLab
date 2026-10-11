@@ -10,6 +10,7 @@ from time import perf_counter
 from pdf_to_ofx.application.convert import analyze_pdf
 from pdf_to_ofx.corpus.fingerprint import StructuralFingerprint, fingerprint_analysis, fingerprint_pdf
 from pdf_to_ofx.corpus.manifest import CorpusEntry
+from pdf_to_ofx.corpus.evaluation import evaluate, statement_signature
 from pdf_to_ofx.corpus.privacy import opaque_hash
 
 
@@ -47,7 +48,7 @@ def analyze_corpus(manifest: Path, output: Path) -> BatchSummary:
         raise ValueError("Report must not replace its manifest.")
     if output.suffix.lower() != ".jsonl":
         raise ValueError("Corpus reports require a JSONL output path.")
-    cache: dict[str, tuple[int, StructuralFingerprint, str | None]] = {}
+    cache: dict[str, tuple[int, StructuralFingerprint, str | None, str | None]] = {}
     entries = analyzed = duplicates = input_errors = 0
     temporary = None
     with manifest.open("rb") as source:
@@ -63,12 +64,23 @@ def analyze_corpus(manifest: Path, output: Path) -> BatchSummary:
                     started = perf_counter()
                     fingerprint = StructuralFingerprint()
                     entry = None
+                    actual_signature = None
                     digest = duplicate_of = error = None
                     try:
                         entry = CorpusEntry.from_dict(decode_json(raw.decode("utf-8")))
                     except (ValueError, UnicodeError):
                         error = "manifest_invalid"
                     if entry is not None:
+                        if entry.ground_truth_path:
+                            truth_path = Path(entry.ground_truth_path)
+                            if not truth_path.is_absolute():
+                                truth_path = manifest.parent / truth_path
+                            try:
+                                protects_truth = truth_path.resolve() == output.resolve()
+                            except (ValueError, OSError, RuntimeError):
+                                protects_truth = False
+                            if protects_truth:
+                                raise ValueError("Report must not replace independent expectations.")
                         if not entry.local_path or not entry.local_path.strip():
                             error = "path_missing"
                         else:
@@ -93,16 +105,17 @@ def analyze_corpus(manifest: Path, output: Path) -> BatchSummary:
                                 if entry.sha256 is not None and entry.sha256 != digest:
                                     error = "hash_mismatch"
                                 elif digest in cache:
-                                    duplicate_of, fingerprint, error = cache[digest]
+                                    duplicate_of, fingerprint, error, actual_signature = cache[digest]
                                     duplicates += 1
                                 else:
                                     analyzed += 1
                                     try:
-                                        analysis = analyze_pdf(path)
+                                        analysis = analyze_pdf(path, retain_document=False)
                                     except Exception:
                                         # Do not serialize exception text, repr or traceback.
                                         error = "analysis_error"
                                     else:
+                                        actual_signature = statement_signature(analysis.statement) if analysis.statement is not None else None
                                         try:
                                             fingerprint = fingerprint_pdf(path, analysis)
                                         except Exception:
@@ -116,7 +129,7 @@ def analyze_corpus(manifest: Path, output: Path) -> BatchSummary:
                                     if error == "file_changed":
                                         fingerprint = StructuralFingerprint()
                                     else:
-                                        cache[digest] = (line_number, fingerprint, error)
+                                        cache[digest] = (line_number, fingerprint, error, actual_signature)
                     input_errors += error is not None
                     record = {
                         "schema_version": 1, "manifest_line": line_number,
@@ -127,6 +140,13 @@ def analyze_corpus(manifest: Path, output: Path) -> BatchSummary:
                         "structural_signature": fingerprint.structural_signature,
                         "outcome_signature": fingerprint.outcome_signature,
                     }
+                    if entry is not None and entry.schema_version == 2:
+                        classification, truth_error = evaluate(entry, manifest, digest, fingerprint.analysis_status, actual_signature) if error is None else ("unverified", "input_error")
+                        record["evaluation"] = {
+                            "classification": classification, "truth_error": truth_error,
+                            "dataset": entry.dataset,
+                            "family_hash": opaque_hash(entry.structural_family) if entry.structural_family else None,
+                        }
                     report.write(json.dumps(record, sort_keys=True, ensure_ascii=True) + "\n")
             temporary.replace(output)
             temporary = None

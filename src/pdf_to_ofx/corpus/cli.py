@@ -6,7 +6,7 @@ from pathlib import Path
 import sys
 
 from pdf_to_ofx.corpus.batch import analyze_corpus
-from pdf_to_ofx.corpus.report import aggregate_report, render_report
+from pdf_to_ofx.corpus.report import aggregate_report, render_report, compare_reports
 
 
 def main(argv: list[str]) -> int:
@@ -17,6 +17,7 @@ def main(argv: list[str]) -> int:
     analyze.add_argument("-o", "--output", type=Path, default=Path(".corpus/reports/latest.jsonl"))
     report = commands.add_parser("report", help="Aggregate unique document outcomes and structural failures")
     report.add_argument("input", type=Path)
+    report.add_argument("--baseline", type=Path, help="Compare with an earlier sanitized run")
     report.add_argument("--json", action="store_true", help="Print the complete aggregate and capability matrix")
     report.add_argument("--top", type=int, default=10, help="Maximum rows in each human-readable cluster/matrix section")
     args = parser.parse_args(argv)
@@ -29,8 +30,13 @@ def main(argv: list[str]) -> int:
                   f"{summary.duplicates} duplicates; {summary.input_errors} input errors")
             return 0 if summary.input_errors == 0 else 1
         aggregate = aggregate_report(args.input)
+        if args.baseline:
+            aggregate["comparison"] = compare_reports(args.input, args.baseline)
         print(json.dumps(aggregate, indent=2, sort_keys=True) if args.json else render_report(aggregate, args.top))
-        return 0 if not aggregate["input_errors"] else 1
+        evaluation = aggregate["evaluation"]
+        return 1 if (aggregate["input_errors"] or evaluation["critical_false_approvals"]
+                     or evaluation["exact_split_leaks"] or evaluation["declared_family_split_leaks"]
+                     or evaluation["truth_errors"]) else 0
     except (OSError, ValueError):
         print("Corpus command failed: check the local input and JSONL output configuration.", file=sys.stderr)
         return 1

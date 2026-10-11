@@ -136,10 +136,10 @@ def test_unexpected_engine_exception_is_sanitized_and_next_document_runs(corpus_
     entry = json.loads(corpus_manifest.read_text(encoding="utf-8").splitlines()[1])
     with corpus_manifest.open("a", encoding="utf-8") as manifest:
         manifest.write(json.dumps(entry) + "\n")
-    def failing_engine(path):
+    def failing_engine(path, **kwargs):
         if path.stem == "unsupported":
             raise RuntimeError("PESSOA FICTICIA PRIVACIDADE 731,42 DEMO-987654321")
-        return analyze_pdf(path)
+        return analyze_pdf(path, **kwargs)
     output = tmp_path / "report.jsonl"
     with patch("pdf_to_ofx.corpus.batch.analyze_pdf", side_effect=failing_engine):
         summary = analyze_corpus(corpus_manifest, output)

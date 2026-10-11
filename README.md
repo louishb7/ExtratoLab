@@ -1,11 +1,17 @@
-# PDF to OFX
+# ExtratoLab
 
-An offline conversion core for an accounting office that receives PDF bank
-statements and uses OFX in its Athenas workflow. Financial document contents are
-processed locally, without external services, APIs, telemetry, or persistence
-beyond the requested output file.
+A local Python/PySide6 desktop application for interpreting, reviewing and
+validating digital PDF bank statements, then explicitly exporting approved
+movements as deterministic OFX or CSV. Financial document contents stay on the
+computer; no cloud, uploads, telemetry, login or OCR is required or implemented.
 
-## Development method: Corpus Lab V1
+The engine reasons about financial structures and evidence, not a collection of
+institution-specific parsers. Approval requires independent financial controls,
+complete monetary coverage and field provenance. Ambiguous, unsupported and
+invalid interpretations remain blocked. Synthetic examples do not establish
+universal support or acceptance by accounting systems.
+
+## Development method: Corpus Lab
 
 **Banks are sampling sources, not parser boundaries.** Development now measures
 coverage over a growing local corpus of structurally diverse documents. Corpus
@@ -21,8 +27,11 @@ pdf-to-ofx corpus report .corpus/reports/latest.jsonl --json
 The entire `.corpus/` tree is ignored by Git. No PDFs are moved or downloaded.
 Batch analysis writes content-free JSONL diagnostics without exporting OFX;
 duplicates are analyzed once per actual SHA-256. See
-[Corpus Lab V1](docs/corpus-lab-v1.md) for the manifest schema, fingerprint
-definitions, privacy boundary, capability matrix and fictitious example.
+[Corpus Lab V1](docs/corpus-lab-v1.md) for the preserved observation workflow.
+[Research protocol](docs/corpus-research.md) adds version 2 metadata, independent
+expectations, development/evaluation separation, regression comparison and the
+12 fictitious international experiments. No engine capability was expanded in
+this product cycle; demonstrated gaps remain explicit.
 
 ## Historical milestones: M0 through M12 — Structural monetary roles and bounded hypotheses
 
@@ -103,61 +112,65 @@ On Debian/Ubuntu with X11, Qt also needs the system library `libxcb-cursor0`.
 If Qt reports that its `xcb` platform plugin cannot load because this library
 is missing, install it with `sudo apt install libxcb-cursor0`.
 
-## Desktop use during development
+## Desktop review workflow
 
-Start the application on Linux or Windows PowerShell (with the virtual environment activated) using either:
+Start `extratolab`, `pdf-to-ofx-gui`, or `python -m pdf_to_ofx.ui` in the activated
+virtual environment. After moving/renaming the checkout or adding entry points,
+rerun `python -m pip install -e ".[test]"`; old editable installs can reference the
+previous directory. During development, `PYTHONPATH=src python -m pdf_to_ofx.ui`
+also works on Linux without reinstalling.
+
+1. **Abrir PDF** or drag one local PDF onto the window. Interactive analysis runs
+   in one Qt worker. Opening another document clears the old session immediately;
+   only the newest request may update the interface. A newer request waits for
+   the active worker rather than starting unbounded parallel work.
+2. Review the period, explicit currency, transaction count, credit/debit counts
+   and sums, and available boundary balances. Missing values stay visibly absent.
+3. Select a table row using the mouse or keyboard. **Conferência** shows the
+   interpreted values, debit/credit basis and original page/line/token references.
+   Resolution uses one session cache over the already extracted document; no PDF
+   re-extraction occurs when selecting another row. Missing field evidence is
+   clearly identified. The table is read-only and keeps document order.
+4. **Diagnóstico** distinguishes verified, unavailable and inapplicable controls
+   and explains rejection categories without printing raw internal reasons.
+5. In **Exportação**, supply institution name/ID, bank ID, branch, account and
+   CHECKING/SAVINGS type only when OFX requires them. The form scrolls in smaller
+   windows. Readiness is reassessed on edits. Existing document identity cannot be
+   contradicted; account metadata cannot supply a currency or missing balance.
+   Metadata lives only in the session and is cleared on every new analysis.
+6. **Salvar OFX** uses the existing generator and FITID rules. **Salvar CSV** uses
+   the same approved interpretation gate, independently of OFX account metadata
+   and its closing-balance requirement. Both actions use native dialogs, refuse
+   existing files and publish complete files atomically. Unsupported hard-link
+   filesystems fail safely with a retryable error; no unsafe fallback is used.
+
+CSV v1 is UTF-8 without BOM, comma-delimited with LF record separators, ISO
+`YYYY-MM-DD` dates, signed cent values with a decimal dot, and stable headers
+`date,description,direction,amount,currency,balance_after`. Rows preserve document
+order. Unknown currency and missing transaction balances are empty cells, never
+inferred. Descriptions with spreadsheet formula prefixes receive an apostrophe
+only in serialization; the domain text is unchanged. Import the amount/date
+columns with their intended types and preserve text-cell protection; spreadsheet
+applications can differ when users re-export or strip that protection.
+
+Closing the window while analysis is active defers destruction until the worker
+finishes, without blocking the event loop. Computation is not forcibly cancelled.
+Large transaction tables still use Qt Widgets; graphical PDF overlays, editing,
+conversion history, persistent account profiles and installers remain future work.
+Compatibility with Athenas remains unverified. Native Windows validation requires
+CI or a Windows desktop; offscreen Linux tests do not establish Windows success.
 
 ```bash
-pdf-to-ofx-gui
-# Equivalent module entry point:
-python -m pdf_to_ofx.ui
-```
-
-1. Click **Selecionar PDF**, or drag one local PDF onto the window.
-2. Review the bank/layout, period, counts, balances and validation result.
-3. Review the read-only transaction table. Amounts use Brazilian formatting
-   only in the interface; financial domain values remain exact `Decimal` values.
-4. If export requirements are satisfied, click **Salvar OFX** and choose a new
-   destination using the system dialog.
-   The suggested filename follows the PDF name; existing files are refused.
-
-OFX contents remain in memory until saving is requested. Opening a new PDF clears
-the previous result immediately, including after a failed conversion; an old OFX
-cannot remain exportable. Cancelling a dialog makes no changes. Missing balances
-are displayed as **Não informado pelo extrato**. Conversion failures appear in
-Portuguese without document contents or tracebacks.
-An approved interpretation without account metadata keeps its summary and table
-visible, with **Salvar OFX** disabled and a message explaining the missing data.
-The validation summary distinguishes opening/closing reconciliation from a
-verified running-balance chain whose opening balance was not supplied.
-
-The GUI and CLI call the same application services. Processing is local and
-does not send statements over the internet. There is no conversion history,
-automatic financial persistence, telemetry, editing, or persistent settings.
-The investigated Inter digital layout and Synthetic Bank demonstration remain
-the established end-to-end paths. Generic structures can also be recognized,
-but missing institution/account metadata prevents saving. There is no interface
-for supplying metadata or teaching layouts yet. This is not general support for
-every bank or every Inter statement. **Compatibilidade com Athenas ainda não validada.**
-
-Conversion is synchronous in M3: the public one/two-page fixtures took less than
-30 ms in the initial local measurement. Large PDFs may pause the interface;
-responsiveness must be reassessed with representative larger inputs before
-distribution. No Windows executable or installer is provided yet.
-
-GUI behavior tests use public fixtures and set `QT_QPA_PLATFORM=offscreen`
-automatically inside `tests/ui/conftest.py`. You can also set the platform
-explicitly when running UI tests:
-
-```bash
-# Linux (Bash)
 QT_QPA_PLATFORM=offscreen python -m pytest tests/ui -q
+python -m pytest tests/unit/test_csv_export.py tests/corpus -q
 ```
+
+PowerShell equivalents:
 
 ```powershell
-# Windows (PowerShell)
 $env:QT_QPA_PLATFORM = "offscreen"
 python -m pytest tests/ui -q
+python -m pytest tests/unit/test_csv_export.py tests/corpus -q
 ```
 
 ## CLI and public fixtures

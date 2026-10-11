@@ -1,6 +1,6 @@
 """Local analysis is independent of account identity and OFX requirements."""
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from pathlib import Path
 
@@ -19,6 +19,7 @@ from pdf_to_ofx.generic.parser import StatementContext
 from pdf_to_ofx.generic.profile import LayoutProfile
 from pdf_to_ofx.ofx.generator import OFXProfile, account_profile, generate_ofx, validate_ofx_export
 from pdf_to_ofx.pdf.extractor import extract_pdf
+from pdf_to_ofx.pdf.document import ExtractedDocument
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,6 +44,9 @@ class StatementAnalysis:
     budget_exhausted: bool = False
     # Chronologies actually visited by the existing SearchLedger, not guesses.
     chronology_candidates: tuple[Chronology, ...] | None = None
+
+    # Session-only source data, excluded from equality/repr and diagnostic projections.
+    document: ExtractedDocument | None = field(default=None, compare=False, repr=False)
 
     def __post_init__(self) -> None:
         if self.diagnostic is None:
@@ -81,7 +85,22 @@ class ConversionResult:
 
 
 def analyze_pdf(path: Path, *, layout_profile: LayoutProfile | None = None,
-                context: StatementContext | None = None) -> StatementAnalysis:
+                context: StatementContext | None = None,
+                retain_document: bool = True) -> StatementAnalysis:
+    """Extract once; optionally retain approved source evidence for local review."""
+    try:
+        document = extract_pdf(path)
+    except PDFExtractionError:
+        return StatementAnalysis(AnalysisStatus.UNSUPPORTED,
+            reason="PDF contains no usable digital text or cannot be read.", error_type=PDFExtractionError)
+    analysis = analyze_document(document, layout_profile=layout_profile, context=context)
+    if retain_document and analysis.status == AnalysisStatus.SUCCESS:
+        return replace(analysis, document=document)
+    return analysis
+
+
+def analyze_document(document: ExtractedDocument, *, layout_profile: LayoutProfile | None = None,
+                     context: StatementContext | None = None) -> StatementAnalysis:
     """Extract, interpret, cover and verify locally; never generate OFX.
 
     Identity supplied in legacy context is deliberately excluded. An explicit
@@ -91,7 +110,6 @@ def analyze_pdf(path: Path, *, layout_profile: LayoutProfile | None = None,
     financial_context = replace(context, bank_id="unknown", account=None) if context else None
     name = "Instituição não identificada"
     try:
-        document = extract_pdf(path)
         parser = None
         if layout_profile is None:
             try:
@@ -212,7 +230,7 @@ def export_analysis(analysis: StatementAnalysis, metadata: BankAccount | OFXProf
 def parse_pdf(path: Path, *, layout_profile: LayoutProfile | None = None,
               context: StatementContext | None = None) -> ParsedStatement:
     """Compatibility wrapper; legacy context identity is attached after analysis."""
-    analysis = analyze_pdf(path, layout_profile=layout_profile, context=context)
+    analysis = analyze_pdf(path, layout_profile=layout_profile, context=context, retain_document=False)
     statement = _approved_statement(analysis)
     name = analysis.bank_name
     if context is not None:

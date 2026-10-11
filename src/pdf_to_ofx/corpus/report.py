@@ -5,6 +5,7 @@ import re
 from pathlib import Path
 
 from pdf_to_ofx.corpus.batch import decode_json
+from pdf_to_ofx.corpus.evaluation import CLASSIFICATIONS
 from pdf_to_ofx.corpus.fingerprint import StructuralFingerprint
 from pdf_to_ofx.corpus.privacy import technical_code
 from pdf_to_ofx.domain.evidence import AnalysisStatus
@@ -75,6 +76,26 @@ def _fingerprint(value: object) -> StructuralFingerprint:
     return StructuralFingerprint(**data)
 
 
+def _evaluation(value: object) -> dict:
+    """Sanitize edited report blocks before using any label as a metric key."""
+    if not isinstance(value, dict):
+        raise ValueError("Invalid evaluation block.")
+    result = {key: value.get(key) for key in ("dataset", "family_hash", "truth_error")}
+    result["classification"] = value.get("classification", "unverified")
+    if not isinstance(result["classification"], str) or result["classification"] not in CLASSIFICATIONS:
+        raise ValueError("Invalid evaluation classification.")
+    dataset = result["dataset"]
+    if dataset is not None and (not isinstance(dataset, str) or dataset not in {"development", "evaluation"}):
+        raise ValueError("Invalid evaluation dataset.")
+    family = result["family_hash"]
+    if family is not None and (not isinstance(family, str) or not re.fullmatch(r"[0-9a-f]{64}", family)):
+        raise ValueError("Invalid family hash.")
+    error = result["truth_error"]
+    if error is not None and (not isinstance(error, str) or error not in {"truth_missing", "truth_hash_mismatch", "truth_not_verified", "truth_invalid", "input_error"}):
+        raise ValueError("Invalid truth error.")
+    return result
+
+
 def capability_incidence(fingerprint: StructuralFingerprint) -> set[str]:
     """Presence per document, not occurrence totals or universal support claims."""
     capabilities = set()
@@ -109,6 +130,11 @@ def aggregate_report(path: Path) -> dict[str, object]:
     seen = set()
     statuses, errors, failures, combinations, signatures = Counter(), Counter(), Counter(), Counter(), Counter()
     matrix: dict[str, dict[str, int]] = {}
+    evaluated = Counter()
+    truth_errors = Counter()
+    splits, families = {}, {}
+    evaluations = {}
+    verified_approvals = valid_documents = 0
     with path.open("rb") as source:
         for raw in source:
             if not raw.strip():
@@ -128,15 +154,31 @@ def aggregate_report(path: Path) -> dict[str, object]:
                         duplicates += 1
                     errors[error] += 1
                     continue
+                if not isinstance(record, dict):
+                    raise ValueError("Invalid report record.")
                 digest = record.get("sha256")
                 if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
                     raise ValueError("Invalid document hash.")
                 fingerprint = _fingerprint(record.get("fingerprint"))
                 if fingerprint.analysis_status is None:
                     raise ValueError("Missing engine verdict.")
+                evaluation = _evaluation(record.get("evaluation", {}))
             except (ValueError, TypeError, UnicodeError):
                 errors["report_invalid"] += 1
                 continue
+            classification = evaluation["classification"]
+            dataset = evaluation.get("dataset") if isinstance(evaluation, dict) else None
+            family = evaluation.get("family_hash") if isinstance(evaluation, dict) else None
+            if dataset in {"development", "evaluation"}:
+                splits.setdefault(digest, set()).add(dataset)
+                if isinstance(family, str) and re.fullmatch(r"[0-9a-f]{64}", family):
+                    families.setdefault(family, set()).add(dataset)
+            if classification not in CLASSIFICATIONS:
+                classification = "unverified"
+            evaluations.setdefault(digest, set()).add(classification)
+            truth_error = evaluation.get("truth_error") if isinstance(evaluation, dict) else None
+            if truth_error in {"truth_missing", "truth_hash_mismatch", "truth_not_verified", "truth_invalid", "input_error"}:
+                truth_errors[truth_error] += 1
             if digest in seen:
                 duplicates += 1
                 continue
@@ -154,6 +196,30 @@ def aggregate_report(path: Path) -> dict[str, object]:
                 incidence = matrix.setdefault(capability, {"documents": 0, "success": 0, "blocked": 0})
                 incidence["documents"] += 1
                 incidence["success" if success else "blocked"] += 1
+    dataset_counts = {name: Counter() for name in ("development", "evaluation")}
+    for digest, values in evaluations.items():
+        known = values - {"unverified"}
+        if len(known) > 1:
+            evaluated["unverified"] += 1
+            truth_errors["conflicting_truth"] += 1
+        else:
+            classification = next(iter(known), "unverified")
+            evaluated[classification] += 1
+            verified_approvals += classification in {"correct_approval", "incorrect_approval"}
+            valid_documents += classification in {"correct_approval", "false_rejection"}
+        datasets = splits.get(digest, set())
+        if len(datasets) == 1:
+            dataset_counts[next(iter(datasets))]["unverified" if len(known) > 1 else next(iter(known), "unverified")] += 1
+    by_dataset = {}
+    for name, counts in dataset_counts.items():
+        approved = counts["correct_approval"] + counts["incorrect_approval"]
+        valid = counts["correct_approval"] + counts["false_rejection"]
+        by_dataset[name] = {
+            "classifications": {key: counts[key] for key in sorted(CLASSIFICATIONS)},
+            "correct_coverage": counts["correct_approval"] / valid if valid else None,
+            "approval_precision": counts["correct_approval"] / approved if approved else None,
+        }
+    critical = sum("incorrect_approval" in values for values in evaluations.values())
     ranked = lambda counter: dict(sorted(counter.items(), key=lambda item: (-item[1], item[0])))
     return {
         "schema_version": 1, "entries": entries, "documents": documents, "duplicates": duplicates,
@@ -162,6 +228,17 @@ def aggregate_report(path: Path) -> dict[str, object]:
         "failure_clusters": ranked(failures), "stage_capability_clusters": ranked(combinations),
         "outcome_signatures": dict(sorted(signatures.items())),
         "capability_matrix": dict(sorted(matrix.items())),
+        "evaluation": {
+            "classifications": {name: evaluated[name] for name in sorted(CLASSIFICATIONS)},
+            "by_dataset": by_dataset,
+            "truth_errors": dict(sorted(truth_errors.items())),
+            "correct_coverage": evaluated["correct_approval"] / valid_documents if valid_documents else None,
+            "approval_precision": evaluated["correct_approval"] / verified_approvals if verified_approvals else None,
+            "critical_false_approvals": critical,
+            "unique_declared_families": len(families),
+            "exact_split_leaks": sum(len(x) > 1 for x in splits.values()),
+            "declared_family_split_leaks": sum(len(x) > 1 for x in families.values()),
+        },
     }
 
 
@@ -181,4 +258,41 @@ def render_report(report: dict[str, object], top: int = 10) -> str:
     matrix = sorted(report["capability_matrix"].items(), key=lambda item: (-item[1]["documents"], item[0]))
     lines.extend(f"{counts['documents']:>5} / {counts['success']:>5} / {counts['blocked']:>5}  {code}"
                  for code, counts in matrix[:top])
+    evaluation = report.get("evaluation", {})
+    lines.append("\nIndependent evaluation (unknown metrics stay null)")
+    lines.append(str(evaluation))
+    if "comparison" in report:
+        lines.append("\nRegression comparison")
+        lines.append(str(report["comparison"]))
     return "\n".join(lines)
+
+
+def compare_reports(current: Path, baseline: Path) -> dict:
+    """Compare the same SHA-256 population; no causal attribution to a bank."""
+    def outcomes(path):
+        result = {}
+        with path.open("r", encoding="utf-8") as source:
+            for raw in source:
+                if not raw.strip():
+                    continue
+                record = decode_json(raw)
+                if not isinstance(record, dict):
+                    raise ValueError("Invalid report record.")
+                digest = record.get("sha256")
+                if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest) or record.get("input_error"):
+                    continue
+                evaluation = _evaluation(record.get("evaluation", {}))
+                classification = evaluation["classification"]
+                if classification in CLASSIFICATIONS:
+                    result.setdefault(digest, set()).add(classification)
+        return {digest: next(iter(values)) if len(values) == 1 else "unverified" for digest, values in result.items()}
+    now, before = outcomes(current), outcomes(baseline)
+    shared = now.keys() & before.keys()
+    return {
+        "shared_documents": len(shared), "added_documents": len(now.keys() - before.keys()),
+        "new_correct_approvals": sum(now[d] == "correct_approval" and before[d] != "correct_approval" for d in shared),
+        "lost_correct_approvals": sum(before[d] == "correct_approval" and now[d] != "correct_approval" for d in shared),
+        "new_false_approvals": sum(now[d] == "incorrect_approval" and before[d] != "incorrect_approval" for d in shared),
+        "new_failure_clusters": sorted(aggregate_report(current)["failure_clusters"].keys() - aggregate_report(baseline)["failure_clusters"].keys()),
+        "attribution": "Controlled runs with unchanged independent expectations are required to attribute a gain to a capability.",
+    }
