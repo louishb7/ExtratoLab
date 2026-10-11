@@ -54,7 +54,7 @@ def checkpoint_candidates(prepared: CompositionInput, hypothesis: StructuralHypo
                 continue
             points.append(BalanceCheckpoint(cut, region.money.amount, "sparse_checkpoint",
                                             coverage.span(candidate.row, region.start, region.end)))
-        elif candidate.kind == "date_heading" and candidate.amounts and dates is not None:
+        elif candidate.kind in {"date_heading", "daily_checkpoint"} and candidate.amounts and dates is not None:
             if len(candidate.amounts) != 1:
                 raise OperatorFailure("balance_semantics_unknown", "A daily checkpoint needs one exclusive balance region.")
             day = candidate.dates[0].value
@@ -79,7 +79,7 @@ def financial_evidence(statement: Statement, candidates: tuple[RowCandidate, ...
             if not indexes:
                 raise OperatorFailure("financial_evidence", "A flow group contains no transactions.")
             subtotals.append(_sum([statement.transactions[i].amount for i in indexes]) == candidate.amounts[0].money.amount)
-        elif candidate.kind == "date_heading" and candidate.amounts:
+        elif candidate.kind in {"date_heading", "daily_checkpoint"} and candidate.amounts:
             sourced = [point for point in statement.checkpoints if point.kind == "daily_balance"
                        and point.source is not None and control_sources is not None
                        and point.source == control_sources.get(candidate.position)]

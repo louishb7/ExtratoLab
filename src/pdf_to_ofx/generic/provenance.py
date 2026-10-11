@@ -18,13 +18,16 @@ class VisualCoverage(CoverageLedger):
         counts: dict[int, int] = {}
         expected = []
         observed = []
+        caption_currencies = []
         separators = description_separators(rows, tolerances)
+        from pdf_to_ofx.generic.operators.columns import declared_description_references, observe_column_header
+        references = declared_description_references(rows, tolerances)
         for row in rows:
             counts[row.page] = counts.get(row.page, 0) + 1
             self.row_indexes[id(row)] = (row.page, counts[row.page])
             scan = scan_money_regions(row, tolerances, decimal_dot_table=decimal_dot_table)
             incomplete = tuple((start, end) for start, end in scan.incomplete
-                               if (id(row), start, end) not in separators)
+                               if (id(row), start, end) not in separators | references)
             if incomplete:
                 raise OperatorFailure("monetary_token_incomplete",
                     "A monetary expression is not completely recognized.",
@@ -34,9 +37,17 @@ class VisualCoverage(CoverageLedger):
             expected.extend(self.span(row, region.start, region.end) for region in scan.regions)
             observed.extend((self.span(row, region.start, region.end), region.money.currency)
                             for region in scan.regions if region.money.currency is not None)
+            header = observe_column_header(row, tolerances)
+            if header is not None and header.signed_table:
+                from pdf_to_ofx.domain.currency import Currency
+                caption_currencies.extend((self.span(row, i, i + 1), Currency('BRL')) for i in (3, 5))
         super().__init__(tuple(expected))
         for source, currency in observed:
             self.observe_currency(source, currency)
+        # Validated currency captions own literal symbols, not monetary values.
+        # They participate in conflict checks and currency provenance without
+        # adding a fictitious amount to the monetary inventory.
+        self.currencies.update(caption_currencies)
 
     def span(self, row: Row, start: int = 0, end: int | None = None) -> SourceSpan:
         page, index = self.row_indexes[id(row)]

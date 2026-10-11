@@ -7,6 +7,8 @@ from pdf_to_ofx.domain.evidence import AnalysisStatus
 
 CLASSIFICATIONS = frozenset({"correct_approval", "incorrect_approval", "correct_rejection",
                             "false_rejection", "out_of_scope", "unverified"})
+EVIDENCE_KINDS = frozenset({"synthetic_recipe", "manual_double_review", "official_export",
+                          "independent_document_reconstruction"})
 
 
 def statement_signature(statement):
@@ -40,7 +42,7 @@ def evaluate(entry, manifest: Path, digest: str, status: str, actual_signature: 
             raise ValueError()
         if truth.get("sha256") != digest:
             return "unverified", "truth_hash_mismatch"
-        if truth.get("independently_verified") is not True or truth.get("evidence_kind") not in {"synthetic_recipe", "manual_double_review", "official_export"}:
+        if truth.get("independently_verified") is not True or truth.get("evidence_kind") not in EVIDENCE_KINDS:
             return "unverified", "truth_not_verified"
         expected = truth.get("expectation")
         if expected not in {"valid_statement", "insufficient_evidence", "out_of_scope"}:

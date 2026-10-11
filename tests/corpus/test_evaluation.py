@@ -186,3 +186,24 @@ def test_structural_family_leaks_excluded_from_both_dataset_metrics(research, tm
         assert metrics["excluded_split_leak_documents"] == 1
         assert metrics["correct_coverage"] is metrics["approval_precision"] is None
         assert sum(metrics["classifications"].values()) == 0
+
+
+@pytest.mark.parametrize('verified', [True, False])
+def test_independent_document_reconstruction_keeps_hash_and_signature_checks(research, tmp_path, verified):
+    manifest, path, entry, truth = research
+    truth['evidence_kind'] = 'independent_document_reconstruction'
+    truth['independently_verified'] = verified
+    path.write_text(json.dumps(truth), encoding='utf-8')
+    output = tmp_path / 'cross-check.jsonl'
+    analyze_corpus(manifest, output)
+    counts = aggregate_report(output)['evaluation']['classifications']
+    assert counts['correct_approval' if verified else 'unverified'] == 1
+    if verified:
+        truth['statement']['transactions'][0]['amount'] = '501.00'
+        path.write_text(json.dumps(truth), encoding='utf-8')
+        analyze_corpus(manifest, output)
+        assert aggregate_report(output)['evaluation']['critical_false_approvals'] == 1
+        truth['sha256'] = '0' * 64
+        path.write_text(json.dumps(truth), encoding='utf-8')
+        analyze_corpus(manifest, output)
+        assert aggregate_report(output)['evaluation']['classifications']['unverified'] == 1

@@ -13,8 +13,8 @@ NUMBER = r"(?:0|[1-9][0-9]{0,2}(?:\.[0-9]{3})*|[1-9][0-9]*),[0-9]{2}"
 DOT_NUMBER = r"(?:0|[1-9][0-9]{0,2}(?:,[0-9]{3})*|[1-9][0-9]*)\.[0-9]{2}"
 ADDITIONAL_ISO_MONEY_CODES = ("INR", "SGD")
 ISO_MONEY_CODES = ("BRL", "EUR", "USD", *ADDITIONAL_ISO_MONEY_CODES)
-MONEY = re.compile(rf"(?P<sign>[+-]?)\s*(?:(?P<symbol>R\$|{'|'.join(ISO_MONEY_CODES)})\s*)?(?P<number>{NUMBER}|{DOT_NUMBER})(?:\s+(?P<marker>[CD]))?")
-TABLE_MONEY = re.compile(rf"(?P<sign>[+-]?)\s*(?:(?P<symbol>R\$|\$|{'|'.join(ISO_MONEY_CODES)})\s*)?(?P<number>{NUMBER}|{DOT_NUMBER})(?:\s+(?P<marker>[CD]))?")
+MONEY = re.compile(rf"(?P<sign>[+-]?)\s*(?:(?P<symbol>R\$|{'|'.join(ISO_MONEY_CODES)})\s*)?(?P<number>{NUMBER}|{DOT_NUMBER})(?:\s*(?P<suffix>[+-]))?(?:\s+(?P<marker>[CD]))?")
+TABLE_MONEY = re.compile(rf"(?P<sign>[+-]?)\s*(?:(?P<symbol>R\$|\$|{'|'.join(ISO_MONEY_CODES)})\s*)?(?P<number>{NUMBER}|{DOT_NUMBER})(?:\s*(?P<suffix>[+-]))?(?:\s+(?P<marker>[CD]))?")
 # Lexical evidence only: the symbol proves a currency, not a number format or a country.
 # Widening this table belongs to the lexical layer (I2/I3).
 CURRENCY_SYMBOLS = {"R$": Currency("BRL"), **{code: Currency(code) for code in ISO_MONEY_CODES}}
@@ -71,6 +71,12 @@ def parse_money(text: str, *, decimal_dot_table: bool = False) -> Money | None:
     if match is None:
         return None
     sign, marker = match["sign"], match["marker"]
+    # One printed sign has one owner. Redundant or competing affixes abstain,
+    # including a suffix combined with a direction marker.
+    if match["suffix"]:
+        if sign or marker:
+            return None
+        sign = match["suffix"]
     if (sign == "-" and marker == "C") or (sign == "+" and marker == "D"):
         return None
     number = match["number"]
@@ -151,7 +157,7 @@ def scan_money_regions(row: Row, tolerances: Tolerances, *, decimal_dot_table: b
 
     for region in regions:
         start, end = region.start, region.end
-        explicit_start = region.money.explicit_sign or any(row.words[start].text.startswith(prefix)
+        explicit_start = row.words[start].text.startswith(('+', '-')) or any(row.words[start].text.startswith(prefix)
             for prefix in (*CURRENCY_SYMBOLS, *(("$",) if decimal_dot_table else ())))
         while start and start - 1 not in covered and adjacent(start - 1, start):
             previous = start - 1

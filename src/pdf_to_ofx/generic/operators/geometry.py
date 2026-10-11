@@ -24,7 +24,8 @@ def observe_geometry(document: ExtractedDocument, supplied: LayoutProfile | None
         return framed
     base = LayoutProfile(DateMode.PER_TRANSACTION, AmountMode.SIGNED, BalanceMode.RUNNING,
                          footer_rows=contact_footer_rows(rows), tolerances=tolerances,
-                         decimal_dot_table=any(observe_column_header(row, tolerances) for row in rows))
+                         decimal_dot_table=any((h := observe_column_header(row, tolerances)) is not None
+                                               and not h.signed_table for row in rows))
     candidates = semantic_candidates(rows, base)
     start = next((c.position for c in candidates if c.dates and
                   (c.kind in {"date_heading", "flow"} or c.kind == "content" and c.amounts)), len(candidates))

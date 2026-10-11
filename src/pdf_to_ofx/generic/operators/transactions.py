@@ -2,8 +2,8 @@
 
 from dataclasses import dataclass, replace
 
-from pdf_to_ofx.generic.operators.candidates import DateCandidate, OperatorFailure, _flow, _period, date_candidates, document_date_order, document_period
-from pdf_to_ofx.generic.operators.columns import ColumnHeader, observe_column_header
+from pdf_to_ofx.generic.operators.candidates import DateCandidate, OperatorFailure, _flow, _period, date_candidates, dated_opening_label, document_date_order, document_period
+from pdf_to_ofx.generic.operators.columns import ColumnHeader, description_reference_indexes, observe_column_header
 from pdf_to_ofx.generic.profile import LayoutProfile
 from pdf_to_ofx.generic.semantics import MoneyRegion, balance_labels, has_financial_signal, money_regions
 from pdf_to_ofx.generic.structure import Row
@@ -44,7 +44,23 @@ def semantic_candidates(rows: tuple[Row, ...], profile: LayoutProfile) -> tuple[
             kind = "column_header"
         elif _period(row):
             kind = "period"
-        elif (header is not None and header.row.page == row.page and not dates and amounts
+        elif row.text.casefold().rstrip(':') == 'observações':
+            kind = "note_boundary"
+        elif (dated_opening_label(row) and len(dates) == 1 and dates[0].start == 0
+              and len(amounts) == 1 and amounts[0].start == 3 and amounts[0].end == len(row.words)):
+            kind = 'balance_declaration'
+        elif (header is not None and header.signed_table and len(dates) == 1 and dates[0].start == 0
+              and len(amounts) == 1 and amounts[0].end == len(row.words)
+              and " ".join(w.text for w in row.words[dates[0].end:amounts[0].start]).casefold().rstrip(':')
+              in {'saldo do dia', 'saldo diário'}):
+            # A dated table owns each posting date. This balance is a control,
+            # never a new date group for later movements.
+            kind = "daily_checkpoint"
+            if (abs(row.words[0].x0 - header.row.words[0].x0) > profile.tolerances.row_y
+                    or abs(row.words[dates[0].end].x0 - header.row.words[1].x0) > profile.tolerances.row_y
+                    or header.bind(amounts, profile.tolerances, balance_only=True) != ('balance',)):
+                raise OperatorFailure('column_ownership', 'A daily balance lacks its declared balance cell.')
+        elif (header is not None and not header.signed_table and header.row.page == row.page and not dates and amounts
               and ' '.join(w.text for w in row.words[:amounts[0].start]).casefold() == 'total'
               and abs(row.words[0].x0 - header.row.words[1].x0) <= profile.tolerances.row_y):
             kind = "column_total"
@@ -70,8 +86,11 @@ def semantic_candidates(rows: tuple[Row, ...], profile: LayoutProfile) -> tuple[
             roles = header.bind(amounts, profile.tolerances, totals=True)
             owner = header
         if header is not None and kind == "content" and dates and amounts:
-            if header.row.page != row.page:
+            if header.row.page != row.page and not header.signed_table:
                 raise OperatorFailure("column_ownership", "A new page requires its own financial column header.")
+            if header.signed_table and (len(dates) != 1 or dates[0].start != 0
+                    or abs(row.words[0].x0 - header.row.words[0].x0) > profile.tolerances.row_y):
+                raise OperatorFailure('column_ownership', 'A signed table requires one date in its declared date cell.')
             roles = header.bind(amounts, profile.tolerances)
             owner = header
         output.append(RowCandidate(position, row, dates, amounts, kind, owner, roles))
@@ -91,7 +110,7 @@ def segment_transactions(candidates: tuple[RowCandidate, ...], profile: LayoutPr
         if row.page != previous_page and not profile.carry_date_across_pages:
             active = False
         previous_page = row.page
-        if candidate.kind in {"date_heading", "flow", "checkpoint", "column_header", "column_total"}:
+        if candidate.kind in {"date_heading", "flow", "checkpoint", "daily_checkpoint", "column_header", "column_total"}:
             active = False
             continue
         if candidate.kind != "content":
@@ -137,7 +156,10 @@ def description_intervals(segment: TransactionSegment, date: DateCandidate | Non
     text = " ".join(w.text for row, start, end in intervals for w in row.words[start:end])
     if text.casefold().rstrip(":") in {"saldo", "subtotal"}:
         raise OperatorFailure("monetary_role_domain_empty", "A control caption lacks a structural transaction owner.")
-    if (not text or has_financial_signal(text)
+    references = description_reference_indexes(head.row, head.column_header)
+    financial_text = " ".join(w.text for row, begin, end in intervals for i, w in enumerate(row.words)
+                              if begin <= i < end and (row is not head.row or i not in references))
+    if (not text or has_financial_signal(financial_text)
             or reject_balance_heading and balance_labels(text) and text.casefold().startswith("saldo ")):
         raise OperatorFailure("transaction_segmentation", "Incomplete or unclassified transaction description.")
     return tuple(intervals)

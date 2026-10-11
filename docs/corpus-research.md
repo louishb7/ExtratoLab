@@ -273,3 +273,73 @@ Python 3.13, actual FAT/exFAT/network-share publication and Athenas remain
 acceptance work. An existing CI matrix is an execution recipe, not execution
 proof. No external PDF or truth is committed, and no new collection-specific
 parser or evaluation subsystem was created.
+
+## Cycle 04: Brazilian documentary research and bounded operators
+
+The ignored local catalog is `.corpus/pesquisa-br-01/`. The authorized user
+collection contains 28 PDFs / 26 unique hashes; directory membership does not
+prove Brazilian origin or statement validity. Eight unique documents were
+preliminary digital statement candidates, including two English examples. Six
+Portuguese/BRL candidates belong to five structural families. Other materials
+include three compilations, twelve visual PDF wrappers, a blank model, an
+educational guide and an advertorial reference. These do not belong in the
+verified financial denominator.
+
+The [Alterdata layout section](https://ajuda.alterdata.com.br/packupbase/tema-eescriture/eescriture-layouts-reconhecidos-pelo-eescriture)
+exposed 47 unique institution pages, 255 named variant labels and 256 images
+(238 PNG / 18 JPEG), with zero available PDFs, exact duplicate downloads or
+failed requests. Original bytes, source URLs and SHA-256 stay local. Usage rights
+and personal-data review remain undetermined: every image is quarantined and
+none was used as a digital financial acceptance case or redistributed. Public
+access is not a redistribution license. No OCR was introduced.
+
+The original full-collection baseline remains immutable: one SUCCESS and 25
+UNSUPPORTED, including one extraction failure. Five of seven preliminary
+candidate families were assigned to development and two to reserved evaluation
+before financial changes. After separating the English examples, the domestic
+subset has three development and two evaluation families; its 60/40 split is
+reported rather than relabeled to claim 70/30. No reserved financial answers
+were used for tuning, and exact/family split leakage remained zero.
+
+New generic operators recognize one trailing ASCII monetary sign, the explicit
+Portuguese `Extrato de ... até ...` / visualization-period declarations,
+compound `Valor (R$)` / `Saldo (R$)` captions with exclusive aligned ownership,
+description-cell slash-group identifiers, a dated opening balance at exactly the
+opening cut, and dated daily controls without turning them into date groups.
+An explicit `Observações` boundary accepts only a financially empty tail.
+Long singleton suffixes (at least 64 transactions) propagate once through the
+same constraints and ledger instead of consuming one recursive search state per
+transaction. The 4-local / 128-global budgets still constrain alternatives;
+ambiguous, contradictory or unowned financial contents still block export.
+Historical FITID algorithms and export semantics were not changed.
+
+Corpus Lab now accepts `independent_document_reconstruction` as an evaluation
+reference kind. This describes expected fields reconstructed with an independent
+PDF extractor, documentary controls and a pinned source hash, **before comparison
+with the engine**. It is not another parser's result, a bank ledger or a second
+human audit. Full expected financial values remain in ignored local truth files;
+reports contain only classifications, hashes and structural counts. This extends
+research evaluation, not financial acceptance or export policy.
+
+A Poppler reconstruction of the already-approved document independently matches
+all 13 movements, descriptions, dates, eleven directional subtotals and boundary
+balances. Replaying HEAD `9fc7b64` confirms it was already a correct approval.
+A second document agrees between Poppler and positioned-word extraction on 145
+movements and 21 daily controls, but ten movements lie outside its declared
+period and 19 of 20 consecutive control intervals do not reconcile. It remains
+rejected. These two documentary references are not blind bank acceptance tests.
+
+Final results remain one correct approval and 25 unsupported documents in the
+local collection: **zero new independently verified external financial gains**.
+Adding a reference to an old SUCCESS is a verification gain, not an interpreter
+coverage gain. Compare final results with the separately annotated baseline
+replay, while preserving the original unverified baseline. The historical 55
+international PDFs retain two correct approvals and 53 unsupported outcomes;
+all original hashes and expectations are unchanged.
+
+Open blockers include secondary financial snapshots/investment/limit regions,
+nonstandard periods and partial dates, unowned signs, offset rows, spaced glyphs,
+compound flow captions and multiple temporal scopes. Valid fully reviewed
+Brazilian acceptance documents are still needed. Native Windows, Python 3.13,
+FAT/exFAT/network-share publication and Athenas import remain unverified. Passing
+synthetic fixtures does not establish support for the depicted institutions.

@@ -27,7 +27,7 @@ def infer_direction(segment: TransactionSegment, roles: AmountRoles, mode: Amoun
                     candidates: tuple[RowCandidate, ...], tolerances: Tolerances,
                     *, carry_across_pages: bool, require_explicit: bool = False) -> DirectionEvidence:
     head = segment.rows[0]
-    if head.column_header is not None:
+    if head.column_header is not None and not head.column_header.signed_table:
         index = head.amounts.index(roles.movement)
         role = head.column_roles[index]
         if role not in {"debit", "credit"}:

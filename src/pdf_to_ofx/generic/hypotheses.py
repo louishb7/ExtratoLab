@@ -132,6 +132,20 @@ def infer_hypotheses(document: ExtractedDocument, *, profile: LayoutProfile | No
                         assignment)), state, (assignment,))
                 return
             index = len(hypothesis.date_assignments)
+            # A long, entirely singleton suffix has no search choice. Propagate
+            # its documented fields once instead of spending the branch budget
+            # and Python stack on hundreds of deterministic prefixes. Every
+            # assignment remains in the ledger; the same complete constraints
+            # and monetary coverage still run before materialization.
+            remaining = local.alternatives[index:]
+            if len(remaining) >= 64 and all(len(options) == 1 for options in remaining):
+                fixed = tuple(options[0] for options in remaining)
+                search(replace(hypothesis,
+                    date_assignments=(*hypothesis.date_assignments, *(c.dated for c in fixed)),
+                    monetary_roles=(*hypothesis.monetary_roles, *(c.roles for c in fixed)),
+                    directions=(*hypothesis.directions, *(c.direction for c in fixed))),
+                    state, tuple(a for c in fixed for a in c.assignments))
+                return
             alternatives = local.alternatives[index]
             for choice in alternatives[::-1] if reverse_candidates else alternatives:
                 search(replace(hypothesis, date_assignments=(*hypothesis.date_assignments, choice.dated),

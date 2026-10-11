@@ -121,11 +121,12 @@ def prepare_composition(document: ExtractedDocument, profile: LayoutProfile,
     if start is None:
         raise OperatorFailure("date_attribution", "No supported dated transaction area was found.")
     # Declarations remain outside transaction segmentation, in the same scope.
-    declaration_kinds = {"balance_declaration"} if legacy_context else {"balance_declaration", "monetary_only"}
-    final_total = next((c.position for c in candidates[start:] if c.kind == "column_total"), None)
+    declaration_kinds = {"balance_declaration", "note_boundary"} if legacy_context else {"balance_declaration", "monetary_only", "note_boundary"}
+    final_total = next((c.position for c in candidates[start:] if c.kind == "column_total"
+                       or c.row.text.casefold().rstrip(':') == 'observações'), None)
     if final_total is not None and any(c.amounts or c.dates or has_financial_signal(c.row.text)
                                      for c in candidates[final_total + 1:]):
-        raise OperatorFailure("transaction_segmentation", "A terminal table total has subsequent financial content.")
+        raise OperatorFailure("transaction_segmentation", "An explicit terminal boundary has subsequent financial content.")
     tail = tuple(c for c in candidates if final_total is not None and c.position > final_total)
     body = tuple(c for c in candidates[start:] if c.kind not in declaration_kinds
                  and (final_total is None or c.position <= final_total))
@@ -233,7 +234,7 @@ def materialize_composition(prepared: CompositionInput, dated: tuple[DatedSegmen
     evidence = financial_evidence(statement, body, tuple(item.group_position for item in dated),
         tuple(direction.group_position for direction in directions), dict(prepared.totals), profile.balance_mode,
         control_sources={c.position: coverage.span(c.row, c.amounts[0].start, c.amounts[0].end)
-                         for c in body if c.kind == "date_heading" and c.amounts})
+                         for c in body if c.kind in {"date_heading", "daily_checkpoint"} and c.amounts})
     return coverage.finish(statement, evidence)
 
 

@@ -39,17 +39,17 @@ def test_diagnose_uses_application_result_without_printing_financial_contents(
     assert not list(tmp_path.glob("*.ofx"))
 
 
-def test_unowned_column_currency_caption_is_located_and_cannot_export(tmp_path, write_layout_pdf):
+def test_supported_caption_with_unaligned_movement_cannot_export(tmp_path, write_layout_pdf):
     path = tmp_path / "fictitious.pdf"
     write_layout_pdf(LAYOUTS / "snapshot_and_dated_table/pages.json", path)
     report = diagnose_pdf(path)
     assert report["status"] == "unsupported"
-    assert report["failure_stage"] == "financial_context"
-    assert report["blocking_capabilities"] == ["financial_caption_ownership"]
+    assert report["failure_stage"] == "geometry"
+    assert report["blocking_capabilities"] == ["column_ownership"]
     assert report["candidate_hypotheses"] == report["explored_hypotheses"] == 0
     assert report["pruned_constraints"] == {}
-    location = report["monetary_diagnostics"]["locations"][0]
-    assert (location["page"], location["row"]) == (1, 5)
+    # Captions are now supported; deliberately unaligned cells fail earlier.
+    assert report["monetary_diagnostics"]["locations"] == []
     assert report["export_readiness"] == "export_blocked"
     with pytest.raises(UnsupportedLayoutError):
         export_analysis(analyze_pdf(path))

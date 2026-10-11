@@ -11,7 +11,7 @@ from decimal import Decimal
 from pdf_to_ofx.domain.errors import StatementValidationError
 from pdf_to_ofx.domain.evidence import FinancialRole, MonetaryAssignment
 from pdf_to_ofx.generic.operators.amounts import EmptyDomainCause, MonetaryDiagnostic, MonetaryDomain, RoleDecision
-from pdf_to_ofx.generic.operators.candidates import OperatorFailure, _period
+from pdf_to_ofx.generic.operators.candidates import OperatorFailure, _period, date_candidates, dated_opening_label, document_date_order, document_period, opening_date_bounds
 from pdf_to_ofx.generic.parser import StatementContext
 from pdf_to_ofx.generic.profile import LayoutProfile
 from pdf_to_ofx.generic.provenance import VisualCoverage
@@ -48,6 +48,8 @@ def read_financial_context(header: tuple[Row, ...], profile: LayoutProfile,
     totals: dict[str, Decimal] = {}
     claimed: set[int] = set()
     domains = []
+    declared_period = document_period(header)
+    order = document_date_order(header)
 
     def declare(field: str, value: date | Decimal) -> None:
         target = declarations if field in StatementContext.__dataclass_fields__ else totals
@@ -57,6 +59,11 @@ def read_financial_context(header: tuple[Row, ...], profile: LayoutProfile,
         target[field] = value
 
     for index, row in enumerate(header):
+        from pdf_to_ofx.generic.operators.columns import observe_column_header
+        column_header = observe_column_header(row, profile.tolerances)
+        if column_header is not None and column_header.signed_table:
+            claimed.add(index)
+            continue
         period = _period(row)
         if period:
             declare("period_start", period[0])
@@ -65,6 +72,13 @@ def read_financial_context(header: tuple[Row, ...], profile: LayoutProfile,
             continue
         regions = money_regions(row, profile.tolerances, decimal_dot_table=profile.decimal_dot_table)
         label = " ".join(w.text for w in row.words[:regions[0].start]) if regions else row.text
+        if dated_opening_label(row):
+            dates = date_candidates(row, order=order, period=declared_period)
+            if (declared_period is None or len(dates) != 1 or dates[0].start != 0 or len(regions) != 1
+                    or regions[0].start != 3 or regions[0].end != len(row.words)
+                    or dates[0].value not in opening_date_bounds(declared_period)):
+                raise OperatorFailure('balance_label_binding', 'A dated opening balance requires the period opening boundary.')
+            label = 'saldo anterior'
         # An unqualified balance is observed, but has no declared temporal anchor.
         # These are the only two boundary roles supported here; unknown captions
         # do not acquire guessed roles merely because their arithmetic might fit.

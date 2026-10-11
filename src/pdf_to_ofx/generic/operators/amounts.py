@@ -93,7 +93,7 @@ def infer_control_roles(candidate: RowCandidate, balance_mode: BalanceMode,
         return (ControlRole(candidate.amounts[0], FinancialRole.SUBTOTAL),)
     if candidate.kind == "checkpoint" and allow_checkpoints:
         return (ControlRole(candidate.amounts[0], FinancialRole.SPARSE_CHECKPOINT),)
-    if candidate.kind != "date_heading":
+    if candidate.kind not in {"date_heading", "daily_checkpoint"}:
         return ()
     row = candidate.row
     date_end = candidate.dates[0].end
@@ -146,7 +146,7 @@ def amount_role_candidates(segment: TransactionSegment, geometry: LayoutProfile,
     head = segment.rows[0]
     columns = (constraint.movement_column,) if constraint else range(size)
     if head.column_roles:
-        movement = next(i for i, role in enumerate(head.column_roles) if role in {"debit", "credit"})
+        movement = next(i for i, role in enumerate(head.column_roles) if role in {"debit", "credit", "movement"})
         if constraint and constraint.movement_column != movement:
             return ()
         columns = (movement,)

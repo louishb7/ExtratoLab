@@ -156,7 +156,7 @@ class Provenance:
     monetary_regions: tuple[MonetaryAssignment, ...] = ()
     regions: tuple[DocumentRegion, ...] = ()
     chronology: ChronologySource | None = None
-    # Monetary tokens whose explicit currency evidence resolved Statement.currency.
+    # Monetary tokens or validated captions resolving Statement.currency.
     currency_sources: tuple[SourceSpan, ...] = ()
 
     @property

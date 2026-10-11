@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 import re
 from typing import TYPE_CHECKING
@@ -38,6 +38,15 @@ class DateCandidate:
 SHORT_DATE = re.compile(r"([0-9]{1,2})/([0-9]{1,2})")
 
 
+def dated_opening_label(row: Row) -> bool:
+    return len(row.words) >= 4 and ' '.join(w.text for w in row.words[1:3]).casefold().rstrip(':') == 'saldo anterior'
+
+
+def opening_date_bounds(period: tuple[date, date]) -> tuple[date, date]:
+    start = period[0]
+    return (start - timedelta(days=1) if start > date.min else start), start
+
+
 def partial_date(text: str, period: tuple[date, date], order: str) -> date | None:
     """A missing year needs exactly one calendar occurrence in the declared period."""
     match = SHORT_DATE.fullmatch(text)
@@ -59,7 +68,8 @@ def date_candidates(row: Row, *, order: str = "day_first", period: tuple[date, d
     candidates = []
     for start in range(len(row.words)):
         if start == 0 and period is not None and SHORT_DATE.fullmatch(row.words[0].text):
-            candidates.append(DateCandidate(partial_date(row.words[0].text, period, order), 0, 1))
+            bounds = opening_date_bounds(period) if dated_opening_label(row) else period
+            candidates.append(DateCandidate(partial_date(row.words[0].text, bounds, order), 0, 1))
         for count, pattern in ((1, NUMERIC_DATE), (1, ISO_DATE), (5, LONG_DATE), (3, SHORT_MONTH_DATE), (3, ENGLISH_DATE)):
             end = start + count
             text = " ".join(w.text for w in row.words[start:end])
@@ -77,6 +87,12 @@ def leading_date(row: Row, *, order: str = "day_first") -> tuple[date, int] | No
 
 
 PERIOD = re.compile(r"per[ií]odo:\s*([0-9]{2}/[0-9]{2}/[0-9]{4})\s+(?:a|até)\s+([0-9]{2}/[0-9]{2}/[0-9]{4})", re.IGNORECASE)
+DOCUMENT_PERIOD = re.compile(
+    r"(?:extrato de|período de visualização:)\s*([0-9]{2}/[0-9]{2}/[0-9]{4})"
+    r"\s+até\s+([0-9]{2}/[0-9]{2}/[0-9]{4})"
+    r"(?:\s+emitido em:\s*[0-9]{2}/[0-9]{2}/[0-9]{4}\s+[0-9]{2}:[0-9]{2}:[0-9]{2})?",
+    re.IGNORECASE,
+)
 
 
 FLOW = re.compile(r"total de (entradas|saídas|créditos|débitos):?", re.IGNORECASE)
@@ -137,19 +153,20 @@ def document_date_order(rows: tuple[Row, ...]) -> str:
             _, order = _international_period(match)
             if NUMERIC_DATE.fullmatch(match[1]):
                 orders.add(order)
-        elif PERIOD.fullmatch(row.text) or WRITTEN_PERIOD.fullmatch(row.text):
+        elif PERIOD.fullmatch(row.text) or DOCUMENT_PERIOD.fullmatch(row.text) or WRITTEN_PERIOD.fullmatch(row.text):
             # Preserve the historical fixed DD/MM grammar; never reinterpret it.
             orders.add("day_first")
     if len(orders) > 1:
         raise OperatorFailure("date_convention_ambiguous", "Declared calendar conventions conflict.")
     period = document_period(rows)
-    short = [row.words[0].text for row in rows if SHORT_DATE.fullmatch(row.words[0].text)]
+    short = [row for row in rows if SHORT_DATE.fullmatch(row.words[0].text)]
     if period and short:
         possible = []
         for order in orders or {"day_first", "month_first"}:
             try:
-                for text in short:
-                    partial_date(text, period, order)
+                for row in short:
+                    bounds = opening_date_bounds(period) if dated_opening_label(row) else period
+                    partial_date(row.words[0].text, bounds, order)
             except OperatorFailure:
                 continue
             possible.append(order)
@@ -169,13 +186,13 @@ def _period(row: Row) -> tuple[date, date] | None:
     international = INTERNATIONAL_PERIOD.fullmatch(row.text)
     if international:
         return _international_period(international)[0]
-    match = PERIOD.fullmatch(row.text) or WRITTEN_PERIOD.fullmatch(row.text)
+    match = PERIOD.fullmatch(row.text) or DOCUMENT_PERIOD.fullmatch(row.text) or WRITTEN_PERIOD.fullmatch(row.text)
     if match is None:
         return None
     start, end = parse_date(match[1]), parse_date(match[2])
     caption = match[3] if match.re is WRITTEN_PERIOD else None
     currency_caption = caption is not None and re.fullmatch(r"(?:valores|valor) em R\$", caption, re.IGNORECASE)
-    if start is None or end is None or (caption and not currency_caption and
+    if start is None or end is None or start > end or (caption and not currency_caption and
             (has_financial_signal(caption) or _has_date(caption))):
         raise StatementParseError("Invalid or ambiguous declared period.")
     return start, end

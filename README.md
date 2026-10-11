@@ -930,3 +930,27 @@ legacy oracles, FITID rules and dependencies remain unchanged. Windows and
 Python 3.13 execution, actual FAT/exFAT publication and Athenas import remain
 unverified. Corpus files, financial expectations and document excerpts remain
 local and ignored; only sanitized evidence belongs in a handoff.
+
+## Cycle 04 Brazilian research
+
+The local research catalog at `.corpus/pesquisa-br-01/` preserves 28 user PDFs
+(26 unique hashes) and 256 quarantined Alterdata reference images. The source
+provided no original PDFs; images and blank templates are excluded from digital
+financial coverage. Two English samples in the user folder are classified
+separately. Original financial files and documentary expectations remain local.
+
+Generic support now includes trailing monetary signs, explicit Portuguese period
+ranges, aligned compound value/balance captions, dated opening/daily controls,
+and declared description-cell identifiers. Long deterministic statements can
+propagate singleton choices without spending the branching budget per movement.
+No bank routing, OCR, monetary-region dropping, new dependency or FITID migration
+was introduced.
+
+The full local collection still has one approved statement and 25 unsupported
+results. The existing approval independently matches 13 movements and all its
+printed subtotals/boundaries; a second cross-checked document is contradictory and
+correctly remains rejected. **There are zero new verified external financial
+approvals in this cycle.** The international 55-PDF regression keeps its two
+historical correct approvals. See [research methodology](docs/corpus-research.md)
+for reference limits, frozen partitions and remaining blockers. Athenas and native
+Windows acceptance are still pending.
