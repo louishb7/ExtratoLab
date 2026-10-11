@@ -37,12 +37,12 @@ def test_window_starts_with_no_exportable_result(window: MainWindow) -> None:
 
 @pytest.mark.parametrize(("fixture", "expected"), [
     ("synthetic_pdf", {
-        "bank": "Synthetic Bank / synthetic-v1", "period": "01/09/2026 a 05/09/2026",
+        "bank": "Synthetic Bank", "period": "01/09/2026 a 05/09/2026",
         "count": "4", "credits": "2", "debits": "2", "opening": "R$ 1.000,00",
         "closing": "R$ 1.365,00", "validation": "Abertura e fechamento reconciliados",
     }),
     ("inter_pdf", {
-        "bank": "Banco Inter / inter-digital-v1", "period": "01/02/2027 a 04/02/2027",
+        "bank": "Banco Inter", "period": "01/02/2027 a 04/02/2027",
         "count": "5", "credits": "3", "debits": "2", "opening": "Não informado pelo extrato",
         "closing": "R$ 1.000,00", "validation": "Saldos progressivos verificados; abertura não reconciliada",
     }),
@@ -157,7 +157,7 @@ def test_new_selection_replaces_all_previous_fields(window: MainWindow, syntheti
     window.load_pdf(inter_pdf)
     assert window.conversion_result == convert_pdf(inter_pdf)
     assert window.selected_file == inter_pdf
-    assert window.summary_labels["bank"].text() == "Banco Inter / inter-digital-v1"
+    assert window.summary_labels["bank"].text() == "Banco Inter"
     assert window.summary_labels["opening"].text() == "Não informado pelo extrato"
     assert window.table.rowCount() == 5
     assert window.table.item(0, 1).text() == "CRÉDITO FICTÍCIO ALFA"

@@ -46,6 +46,9 @@ def test_metadata_cannot_override_established_account(window, inter_pdf):
     fill(window)
     assert not window.save_button.isEnabled()
     assert window.conversion_result is None
+    assert window.export_readiness.issues == ("account_metadata_conflict",)
+    assert "contradizem a conta" in window.export_status_label.text()
+    assert "CSV pronto" in window.export_status_label.text()
 
 
 @pytest.mark.parametrize("status", [AnalysisStatus.INVALID, AnalysisStatus.UNSUPPORTED, AnalysisStatus.AMBIGUOUS])
@@ -66,3 +69,5 @@ def test_metadata_cannot_supply_missing_balance_or_currency(window, generic_pdf)
             window.load_pdf(generic_pdf)
         fill(window)
         assert not window.save_button.isEnabled()
+        assert ("saldo final" if field == "closing_balance" else "moeda") in window.export_status_label.text()
+        assert "CSV pronto" in window.export_status_label.text()

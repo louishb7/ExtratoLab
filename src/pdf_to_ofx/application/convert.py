@@ -7,7 +7,7 @@ from pathlib import Path
 from pdf_to_ofx.banks.detector import detect_parser
 from pdf_to_ofx.domain.errors import (
     AmbiguousStatementError, ConversionError, CurrencyConflictError, MissingOFXMetadataError,
-    MissingOFXRequirementsError, OFXCurrencyConflictError, OFXGenerationError, PDFExtractionError,
+    MissingOFXRequirementsError, OFXCurrencyConflictError, OFXGenerationError, OFXMetadataConflictError, PDFExtractionError,
     StatementParseError, StatementValidationError, UnresolvedCurrencyError, UnsupportedLayoutError,
 )
 from pdf_to_ofx.domain.evidence import AnalysisStatus, DocumentRegion, EvidenceReport, EvidenceStatus, FinancialRole, InferenceDiagnostic, Provenance, default_diagnostic
@@ -212,6 +212,9 @@ def assess_export_readiness(analysis: StatementAnalysis,
         return ExportReadiness(ExportStatus.EXPORT_REQUIREMENTS_MISSING, ("currency_unresolved",))
     except OFXCurrencyConflictError:
         return ExportReadiness(ExportStatus.EXPORT_BLOCKED, ("currency_conflict",))
+    except OFXMetadataConflictError:
+        # Preserve the historical readiness status while exposing the cause.
+        return ExportReadiness(ExportStatus.EXPORT_REQUIREMENTS_MISSING, ("account_metadata_conflict",))
     except MissingOFXRequirementsError:
         return ExportReadiness(ExportStatus.EXPORT_REQUIREMENTS_MISSING, ("closing_balance_missing",))
     except StatementValidationError:

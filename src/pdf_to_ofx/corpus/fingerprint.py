@@ -11,7 +11,7 @@ from pdf_to_ofx.application.diagnose import diagnose_analysis
 from pdf_to_ofx.corpus.privacy import counter_codes, technical_code
 from pdf_to_ofx.domain.errors import PDFExtractionError, StatementParseError
 from pdf_to_ofx.domain.evidence import AnalysisStatus, FinancialRole
-from pdf_to_ofx.generic.operators.candidates import date_candidates
+from pdf_to_ofx.generic.operators.candidates import date_candidates, document_date_order
 from pdf_to_ofx.generic.operators.context import SUMMARY
 from pdf_to_ofx.generic.operators.geometry import observe_geometry
 from pdf_to_ofx.generic.profile import AmountMode, BalanceMode
@@ -136,7 +136,8 @@ def fingerprint_pdf(path: Path, analysis: StatementAnalysis) -> StructuralFinger
                           opening_balance_observed=opening, closing_balance_observed=closing)
     errors = []
     try:
-        fingerprint = replace(fingerprint, date_candidate_count=sum(len(date_candidates(row)) for row in rows))
+        order = document_date_order(rows)
+        fingerprint = replace(fingerprint, date_candidate_count=sum(len(date_candidates(row, order=order)) for row in rows))
     except StatementParseError:
         errors.append("date_candidates_unavailable")
     if fingerprint.money_region_count == 0:

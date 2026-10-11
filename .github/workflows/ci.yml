@@ -13,7 +13,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
-        python-version: ["3.12"]
+        python-version: ["3.12", "3.13"]
 
     env:
       QT_QPA_PLATFORM: offscreen
@@ -40,3 +40,12 @@ jobs:
 
       - name: Run offscreen UI test suite
         run: python -m pytest tests/ui -q
+
+      - name: Check text IO with Windows default encoding
+        if: runner.os == 'Windows'
+        env:
+          PYTHONUTF8: "0"
+          PYTHONCOERCECLOCALE: "0"
+        run: |
+          python -c "import locale, sys; print('Default encoding:', locale.getencoding(), 'UTF-8 mode:', sys.flags.utf8_mode)"
+          python -X warn_default_encoding -W error::EncodingWarning -m pytest tests/unit tests/integration tests/corpus -q

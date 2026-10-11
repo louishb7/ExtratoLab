@@ -21,6 +21,9 @@ EVIDENCE_TEXT = {EvidenceStatus.VERIFIED: "Verificado", EvidenceStatus.NOT_AVAIL
 CAPABILITIES = {
     "checkpoint_reconciliation": "Os saldos de controle não correspondem à soma dos lançamentos no intervalo. Confira os saldos e as movimentações do PDF.",
     "financial_reconciliation": "Os saldos e totais declarados não correspondem às movimentações interpretadas.",
+    "date_convention_ambiguous": "O período não demonstra uma convenção de datas única e válida.",
+    "column_ownership": "Os valores não possuem associação única às colunas de débito, crédito e saldo.",
+    "column_direction_conflict": "O sinal de um valor contradiz a coluna de débito ou crédito.",
     "date_attribution": "Uma data não pôde ser associada a um único lançamento com segurança.",
     "date_period": "Há uma movimentação fora do período declarado; ela não será descartada nem redatada.",
     "transaction_segmentation": "As linhas e continuações não puderam ser agrupadas em lançamentos completos com segurança.",
@@ -37,6 +40,7 @@ CAPABILITIES = {
     "summary_adjustment_undetailed": "Há um ajuste financeiro sem movimentações detalhadas correspondentes.",
 }
 DIRECTIONS = {
+    "debit_credit_column": "Cabeçalho da coluna de débito/crédito",
     "direction_marker": "Marcador explícito C/D",
     "signed_group_subtotal": "Sinal do subtotal do grupo",
     "unsigned_credit_convention": "Convenção estrutural de crédito sem sinal",
@@ -44,6 +48,24 @@ DIRECTIONS = {
     "credit_debit_marker": "Marcador de crédito/débito", "cd_marker": "Marcador C/D",
     "group_subtotal": "Subtotal do grupo", "subtotal_sign": "Sinal do subtotal",
 }
+
+
+EXPORT_ISSUES = {
+    "account_metadata_missing": "São necessários dados bancários adicionais para gerar o OFX.",
+    "account_metadata_conflict": "Os dados bancários informados contradizem a conta identificada no PDF. Confira a identidade da conta.",
+    "currency_unresolved": "A moeda não foi resolvida pelo documento. Dados bancários não podem fornecer essa evidência.",
+    "currency_conflict": "A moeda do perfil contradiz a moeda interpretada. Nenhuma conversão é realizada.",
+    "closing_balance_missing": "O saldo final não está disponível. O perfil OFX exige um saldo final declarado; ele não será calculado para preencher essa ausência.",
+    "financial_validation_failed": "A validação financeira impede a exportação OFX.",
+    "analysis_not_approved": "A interpretação não possui aprovação financeira e proveniência completas para exportação.",
+    "export_requirements_invalid": "Os dados bancários não atendem aos requisitos OFX. Confira os identificadores e o tipo de conta.",
+    "generation_failed": "Não foi possível gerar o OFX com segurança.",
+}
+
+
+def export_issue_text(issues: tuple[str, ...]) -> str:
+    return "\n".join(EXPORT_ISSUES.get(issue, "Um requisito de exportação ainda não foi atendido.")
+                     for issue in issues)
 
 
 def diagnostic_text(analysis):

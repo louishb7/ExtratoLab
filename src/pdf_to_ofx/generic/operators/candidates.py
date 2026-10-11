@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 
 from pdf_to_ofx.domain.errors import StatementParseError
 from pdf_to_ofx.generic.semantics import (
-    LONG_DATE, NUMERIC_DATE, SHORT_MONTH_DATE, has_financial_signal, money_regions, parse_date,
+    ISO_DATE, LONG_DATE, NUMERIC_DATE, SHORT_MONTH_DATE, has_financial_signal, money_regions, parse_date,
 )
 from pdf_to_ofx.generic.structure import Row, Tolerances
 
@@ -35,22 +35,22 @@ class DateCandidate:
     end: int
 
 
-def date_candidates(row: Row) -> tuple[DateCandidate, ...]:
+def date_candidates(row: Row, *, order: str = "day_first") -> tuple[DateCandidate, ...]:
     candidates = []
     for start in range(len(row.words)):
-        for count, pattern in ((1, NUMERIC_DATE), (5, LONG_DATE), (3, SHORT_MONTH_DATE)):
+        for count, pattern in ((1, NUMERIC_DATE), (1, ISO_DATE), (5, LONG_DATE), (3, SHORT_MONTH_DATE)):
             end = start + count
             text = " ".join(w.text for w in row.words[start:end])
             if pattern.fullmatch(text):
-                value = parse_date(text)
+                value = parse_date(text, order=order)
                 if value is None:
                     raise OperatorFailure("date_attribution", "Invalid calendar date in structural region.")
                 candidates.append(DateCandidate(value, start, end))
     return tuple(candidates)
 
 
-def leading_date(row: Row) -> tuple[date, int] | None:
-    candidate = next((d for d in date_candidates(row) if d.start == 0), None)
+def leading_date(row: Row, *, order: str = "day_first") -> tuple[date, int] | None:
+    candidate = next((d for d in date_candidates(row, order=order) if d.start == 0), None)
     return (candidate.value, candidate.end) if candidate else None
 
 
@@ -65,12 +65,54 @@ WRITTEN_PERIOD = re.compile(
 )
 
 def _has_date(text: str) -> bool:
-    return any(pattern.search(text) for pattern in (NUMERIC_DATE, LONG_DATE, SHORT_MONTH_DATE))
+    return any(pattern.search(text) for pattern in (NUMERIC_DATE, ISO_DATE, LONG_DATE, SHORT_MONTH_DATE))
 
 def _stamp(row: Row) -> bool:
     return re.match(r"^(?:extrato|documento) gerado (?:em|(?:no )?dia)\b", row.text, re.IGNORECASE) is not None
 
+
+# New period grammars carry no implicit slash-date convention. Calendar validity
+# of their explicit endpoints must prove one order for the entire document.
+INTERNATIONAL_PERIOD = re.compile(
+    r"(?:statement period|period|période):\s*([0-9]{2}/[0-9]{2}/[0-9]{4}|[0-9]{4}-[0-9]{2}-[0-9]{2})"
+    r"\s+(?:to|au)\s+([0-9]{2}/[0-9]{2}/[0-9]{4}|[0-9]{4}-[0-9]{2}-[0-9]{2})", re.IGNORECASE,
+)
+
+
+def _international_period(match: re.Match) -> tuple[tuple[date, date], str]:
+    if bool(ISO_DATE.fullmatch(match[1])) != bool(ISO_DATE.fullmatch(match[2])):
+        raise OperatorFailure("date_convention_ambiguous", "Period endpoints use competing date representations.")
+    orders = ("day_first",) if ISO_DATE.fullmatch(match[1]) else ("day_first", "month_first")
+    possible = []
+    for order in orders:
+        start, end = parse_date(match[1], order=order), parse_date(match[2], order=order)
+        if start is not None and end is not None and start <= end:
+            possible.append(((start, end), order))
+    if len(possible) != 1:
+        raise OperatorFailure("date_convention_ambiguous", "Explicit period does not prove one calendar convention.")
+    return possible[0]
+
+
+def document_date_order(rows: tuple[Row, ...]) -> str:
+    orders = set()
+    for row in rows:
+        match = INTERNATIONAL_PERIOD.fullmatch(row.text)
+        if match:
+            _, order = _international_period(match)
+            if NUMERIC_DATE.fullmatch(match[1]):
+                orders.add(order)
+        elif PERIOD.fullmatch(row.text) or WRITTEN_PERIOD.fullmatch(row.text):
+            # Preserve the historical fixed DD/MM grammar; never reinterpret it.
+            orders.add("day_first")
+    if len(orders) > 1:
+        raise OperatorFailure("date_convention_ambiguous", "Declared calendar conventions conflict.")
+    return next(iter(orders), "day_first")
+
+
 def _period(row: Row) -> tuple[date, date] | None:
+    international = INTERNATIONAL_PERIOD.fullmatch(row.text)
+    if international:
+        return _international_period(international)[0]
     match = PERIOD.fullmatch(row.text) or WRITTEN_PERIOD.fullmatch(row.text)
     if match is None:
         return None
@@ -82,8 +124,10 @@ def _period(row: Row) -> tuple[date, date] | None:
         raise StatementParseError("Invalid or ambiguous declared period.")
     return start, end
 
-def _flow(row: Row, tolerances: Tolerances) -> tuple[Decimal, int] | None:
-    dated = leading_date(row)
+def _flow(row: Row, tolerances: Tolerances, *, order: str = "day_first") -> tuple[Decimal, int] | None:
+    if _period(row):
+        return None
+    dated = leading_date(row, order=order)
     offset = dated[1] if dated else 0
     regions = money_regions(row, tolerances)
     if len(regions) != 1:

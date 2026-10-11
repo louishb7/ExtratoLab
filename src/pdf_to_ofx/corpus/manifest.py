@@ -53,17 +53,21 @@ class CorpusEntry:
                     "validation_status", "dataset", "structural_family", "ground_truth_path"}
         if version == 1 and value.keys() & research:
             raise ValueError("Research metadata requires manifest version 2.")
-        if version == 2 and value.get("dataset") not in {"development", "evaluation"}:
-            raise ValueError("A research manifest requires an explicit dataset.")
         for key, item in value.items():
             if key == "observed_features":
                 if not isinstance(item, list) or any(not isinstance(x, str) or not x.strip() for x in item):
                     raise ValueError("Invalid observed features.")
+                for feature in item:
+                    feature.encode("utf-8")
                 continue
             if key != "schema_version" and item is not None and not isinstance(item, str):
                 raise ValueError("Manifest metadata must be text or null.")
             if isinstance(item, str):
                 item.encode("utf-8")
+        # Validate types before set membership: malformed JSON arrays/objects
+        # must become a per-row manifest error, never abort the entire batch.
+        if version == 2 and value.get("dataset") not in {"development", "evaluation"}:
+            raise ValueError("A research manifest requires an explicit dataset.")
         data = dict(value)
         if "observed_features" in data:
             data["observed_features"] = tuple(data["observed_features"])

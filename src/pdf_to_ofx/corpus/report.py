@@ -132,7 +132,7 @@ def aggregate_report(path: Path) -> dict[str, object]:
     matrix: dict[str, dict[str, int]] = {}
     evaluated = Counter()
     truth_errors = Counter()
-    splits, families = {}, {}
+    splits, families, document_families = {}, {}, {}
     evaluations = {}
     verified_approvals = valid_documents = 0
     with path.open("rb") as source:
@@ -173,6 +173,7 @@ def aggregate_report(path: Path) -> dict[str, object]:
                 splits.setdefault(digest, set()).add(dataset)
                 if isinstance(family, str) and re.fullmatch(r"[0-9a-f]{64}", family):
                     families.setdefault(family, set()).add(dataset)
+                    document_families.setdefault(digest, set()).add(family)
             if classification not in CLASSIFICATIONS:
                 classification = "unverified"
             evaluations.setdefault(digest, set()).add(classification)
@@ -197,6 +198,7 @@ def aggregate_report(path: Path) -> dict[str, object]:
                 incidence["documents"] += 1
                 incidence["success" if success else "blocked"] += 1
     dataset_counts = {name: Counter() for name in ("development", "evaluation")}
+    excluded = Counter()
     for digest, values in evaluations.items():
         known = values - {"unverified"}
         if len(known) > 1:
@@ -208,7 +210,12 @@ def aggregate_report(path: Path) -> dict[str, object]:
             verified_approvals += classification in {"correct_approval", "incorrect_approval"}
             valid_documents += classification in {"correct_approval", "false_rejection"}
         datasets = splits.get(digest, set())
-        if len(datasets) == 1:
+        leaks = len(datasets) > 1 or any(len(families[family]) > 1
+                                       for family in document_families.get(digest, ()))
+        if leaks:
+            for dataset in datasets:
+                excluded[dataset] += 1
+        elif len(datasets) == 1:
             dataset_counts[next(iter(datasets))]["unverified" if len(known) > 1 else next(iter(known), "unverified")] += 1
     by_dataset = {}
     for name, counts in dataset_counts.items():
@@ -216,6 +223,7 @@ def aggregate_report(path: Path) -> dict[str, object]:
         valid = counts["correct_approval"] + counts["false_rejection"]
         by_dataset[name] = {
             "classifications": {key: counts[key] for key in sorted(CLASSIFICATIONS)},
+            "excluded_split_leak_documents": excluded[name],
             "correct_coverage": counts["correct_approval"] / valid if valid else None,
             "approval_precision": counts["correct_approval"] / approved if approved else None,
         }

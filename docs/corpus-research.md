@@ -1,4 +1,4 @@
-# Corpus Lab research protocol — integrated cycle 01
+# Corpus Lab research protocol — integrated cycles 01 and 02
 
 The existing batch analyzer, deduplication, fingerprints and privacy projection
 remain the only corpus infrastructure. Institution metadata never selects an
@@ -62,8 +62,13 @@ Incorrect approval is critical. Corpus report CLI returns nonzero for critical
 false approvals, truth errors, input/report errors or detected split leakage.
 Rejected financial interpretations are normal research outcomes.
 
-Metrics are also reported separately for development and evaluation; exact
-duplicates present in both sets are excluded from these per-set denominators.
+Metrics are also reported separately for development and evaluation; documents
+with exact duplicates or a declared structural family present in both sets are
+excluded from these per-set denominators. `excluded_split_leak_documents` records
+the unique excluded documents per set. Whole-corpus counts still describe all
+unique documents; they do not represent independent held-out performance when
+leakage exists. A malformed metadata type is recorded as a row error and does
+not stop the remaining batch.
 Exact hashes and declared family hashes are checked across both sets before
 aggregation of duplicates. Repeated documents never inflate metric denominators.
 Conflicting verified expectations for the same bytes are unverified and reported;
@@ -102,7 +107,7 @@ families plus the existing observed/candidate/verified capability matrix.
 The taxonomy maps onto existing domain objects; no duplicate domain class or
 institution-specific parser was introduced.
 
-## Sources consulted on 2026-10-10
+## Sources consulted and rechecked on 2026-10-10
 
 - [ISO 20022 cash management MDR, maintenance 2018–2019](https://www.iso20022.org/sites/default/files/documents/messages/mdr_part_2/ISO20022_MDRPart2_BankToCustomerCashManagement_2018_2019_v1_0.pdf):
   camt.053 models account statements, entries, currency and credit/debit indicators.
@@ -127,7 +132,7 @@ localized captions are author-created hypotheses; they are not quoted bank
 examples or layouts mandated by the standards. No public bank statement PDF was
 collected and no financial document was uploaded.
 
-## Reproduce the international baseline
+## Reproduce the international population (historical baseline below)
 
 ```bash
 python tests/fixtures/international/generate.py /local/new-empty-directory
@@ -163,9 +168,50 @@ The old Corpus Lab demo remains four unique documents with one outcome of each
 status, one duplicate and one intentional missing file; it has no independent
 truth and therefore cannot contribute to precision or correct-coverage metrics.
 
-No optional engine capability was changed: the language/date/column/page gaps
+At the end of cycle 01 no optional engine capability was changed: the language/date/column/page gaps
 require further controlled structural investigation. No claim about new real
 bank coverage, native Windows execution or Athenas acceptance follows from these
 numbers. Next work should isolate numeric/currency lexical conventions from
 language, prove debit/credit-column ownership, and model temporal/booked scopes
 with positive and abstention fixtures before broadening approval.
+
+## Cycle 02 controlled comparison
+
+The original `cases.json`, rendered PDF bytes and financial ground truth remain
+unchanged. The table above preserves the cycle 01 baseline. Sequential runs over
+the same SHA-256 population establish these gains:
+
+| Run | Correct approvals | False rejections | Correct rejections | Incorrect approvals | Gain |
+| --- | ---: | ---: | ---: | ---: | --- |
+| New checkout baseline | 3 | 5 | 4 | 0 | none |
+| Exact ISO-prefixed monetary lexemes | 4 | 4 | 4 | 0 | spanish-euro |
+| Calendar evidence, ISO dates and named controls | 6 | 2 | 4 | 0 | english-us-number, french-iso-dates |
+| Explicit debit/credit cell ownership | 7 | 1 | 4 | 0 | separate-debit-credit-columns |
+| Bounded dated wrap and repeated period frame | 8 | 0 | 4 | 0 | wrapped-repeated-page |
+
+No gains/losses are attributed to new documents. Original development coverage
+is 6/6 and reserved evaluation coverage is 2/2. Both sets have been inspected
+during development and neither is an externally blinded test. Approval precision
+of 8/8 describes only this synthetic population. Real institution coverage and
+Athenas acceptance remain unverified.
+
+`adversarial.json` adds nine separate development recipes: ambiguous monetary
+precision, conflicting currency prefixes, competing slash calendars, duplicate
+column captions, two populated flow columns, a monetary continuation neighbor,
+unproved cross-page continuation, incompatible controls and an out-of-period ISO
+movement. All have independently authored negative expectations and are rejected;
+they do not contribute to the original valid-document denominator. Generate with
+`generate.py OUTPUT --cases tests/fixtures/international/adversarial.json`, then
+use the same analyzer/report commands. No parallel corpus infrastructure exists.
+
+Corpus privacy now recognizes the fixed technical codes `column_ownership`,
+`column_direction_conflict` and `date_convention_ambiguous`; arbitrary unknown
+labels remain hashed. Date observations use the same declared calendar evidence
+as the engine without choosing a financial interpretation. New failure clusters
+are visible while raw content remains excluded.
+
+Remaining limits include unsupported monetary affixes, unspecified precision,
+right-aligned debit/credit cells, more than one occupied flow column, missing
+page captions, booking/value-date ownership, booked/pending scope composition
+and new automatic cross-page description attachment. Independent controls, exact
+coverage, bounded search and export readiness still gate every approval/export.

@@ -4,7 +4,7 @@
 
 **ExtratoLab** is a local desktop application and conversion core (Python + PySide6)
 for interpreting, reviewing, validating, and exporting PDF bank statements into
-deterministic OFX (and future tabular formats) for an accounting office whose
+deterministic OFX and CSV for an accounting office whose
 downstream workflow uses Athenas. Processing must remain 100% local and work
 offline: financial documents are confidential. Athenas compatibility still
 requires a dedicated acceptance test and must not be claimed from synthetic or

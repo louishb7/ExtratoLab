@@ -20,6 +20,10 @@ from pdf_to_ofx.generic.structure import Row
 from pdf_to_ofx.validation.checkpoints import ConstraintViolation
 
 SUMMARY = {
+    "opening balance": ("opening_balance", FinancialRole.OPENING_BALANCE),
+    "closing balance": ("closing_balance", FinancialRole.CLOSING_BALANCE),
+    "solde initial": ("opening_balance", FinancialRole.OPENING_BALANCE),
+    "solde final": ("closing_balance", FinancialRole.CLOSING_BALANCE),
     "saldo inicial": ("opening_balance", FinancialRole.OPENING_BALANCE),
     "saldo anterior": ("opening_balance", FinancialRole.OPENING_BALANCE),
     "saldo final": ("closing_balance", FinancialRole.CLOSING_BALANCE),

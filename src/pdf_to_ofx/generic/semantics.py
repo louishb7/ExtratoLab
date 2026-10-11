@@ -1,4 +1,4 @@
-"""Exact Portuguese dates and Brazilian money, without institution grammars."""
+"""Exact calendar and cent-valued lexical evidence, without institution grammars."""
 
 from dataclasses import dataclass
 from datetime import date
@@ -10,11 +10,13 @@ from pdf_to_ofx.domain.currency import Currency
 from pdf_to_ofx.generic.structure import Row, Tolerances
 
 NUMBER = r"(?:0|[1-9][0-9]{0,2}(?:\.[0-9]{3})*|[1-9][0-9]*),[0-9]{2}"
-MONEY = re.compile(rf"(?P<sign>[+-]?)\s*(?:(?P<symbol>R\$)\s*)?(?P<number>{NUMBER})(?:\s+(?P<marker>[CD]))?")
+DOT_NUMBER = r"(?:0|[1-9][0-9]{0,2}(?:,[0-9]{3})*|[1-9][0-9]*)\.[0-9]{2}"
+MONEY = re.compile(rf"(?P<sign>[+-]?)\s*(?:(?P<symbol>R\$|BRL|EUR|USD)\s*)?(?P<number>{NUMBER}|{DOT_NUMBER})(?:\s+(?P<marker>[CD]))?")
 # Lexical evidence only: the symbol proves a currency, not a number format or a country.
 # Widening this table belongs to the lexical layer (I2/I3).
-CURRENCY_SYMBOLS = {"R$": Currency("BRL")}
+CURRENCY_SYMBOLS = {"R$": Currency("BRL"), **{code: Currency(code) for code in ("BRL", "EUR", "USD")}}
 NUMERIC_DATE = re.compile(r"([0-9]{2})/([0-9]{2})/([0-9]{4})")
+ISO_DATE = re.compile(r"([0-9]{4})-([0-9]{2})-([0-9]{2})")
 LONG_DATE = re.compile(r"([0-9]{1,2}) de ([a-zç]+) de ([0-9]{4})", re.IGNORECASE)
 SHORT_MONTH_DATE = re.compile(r"([0-9]{1,2}) ([a-zç]{3}) ([0-9]{4})", re.IGNORECASE)
 MONTHS = dict(zip(("janeiro", "fevereiro", "março", "abril", "maio", "junho",
@@ -22,12 +24,18 @@ MONTHS = dict(zip(("janeiro", "fevereiro", "março", "abril", "maio", "junho",
 BALANCE_LABEL = re.compile(r"\bsaldo\s+(inicial|anterior|final|total|disponível|bloqueado|do dia|diário)\b", re.IGNORECASE)
 
 
-def parse_date(text: str) -> date | None:
+def parse_date(text: str, *, order: str = "day_first") -> date | None:
+    if order not in {"day_first", "month_first"}:
+        return None
     numeric, written = NUMERIC_DATE.fullmatch(text), LONG_DATE.fullmatch(text)
     abbreviated = SHORT_MONTH_DATE.fullmatch(text)
+    iso = ISO_DATE.fullmatch(text)
     try:
+        if iso:
+            return date(int(iso[1]), int(iso[2]), int(iso[3]))
         if numeric:
-            return date(int(numeric[3]), int(numeric[2]), int(numeric[1]))
+            day, month = (numeric[1], numeric[2]) if order == "day_first" else (numeric[2], numeric[1])
+            return date(int(numeric[3]), int(month), int(day))
         if written:
             return date(int(written[3]), MONTHS[written[2].casefold()], int(written[1]))
         if abbreviated:
@@ -54,7 +62,16 @@ def parse_money(text: str) -> Money | None:
     sign, marker = match["sign"], match["marker"]
     if (sign == "-" and marker == "C") or (sign == "+" and marker == "D"):
         return None
-    amount = Decimal(match["number"].replace(".", "").replace(",", "."))
+    number = match["number"]
+    if re.fullmatch(NUMBER, number):
+        canonical = number.replace(".", "").replace(",", ".")
+    else:
+        # Dot decimals require an explicit supported ISO prefix in this version.
+        # Bare dot numbers remain refusal cues, never interpreted as references.
+        if match["symbol"] not in {"BRL", "EUR", "USD"}:
+            return None
+        canonical = number.replace(",", "")
+    amount = Decimal(canonical)
     if sign == "-" or marker == "D":
         amount = amount.copy_negate()
     return Money(amount, marker, bool(sign), CURRENCY_SYMBOLS.get(match["symbol"]))
@@ -122,7 +139,7 @@ def scan_money_regions(row: Row, tolerances: Tolerances) -> MoneyScan:
 
     for region in regions:
         start, end = region.start, region.end
-        explicit_start = region.money.explicit_sign or row.words[start].text.startswith("R$")
+        explicit_start = region.money.explicit_sign or any(row.words[start].text.startswith(prefix) for prefix in CURRENCY_SYMBOLS)
         while start and start - 1 not in covered and adjacent(start - 1, start):
             previous = start - 1
             # A separated reference before +amount/R$amount is description.
@@ -144,11 +161,19 @@ def scan_money_regions(row: Row, tolerances: Tolerances) -> MoneyScan:
         # but reject an inventory that would leave its sign/currency unconsumed.
         if region.start and region.start - 1 not in covered:
             prefix = row.words[region.start - 1].text
-            if prefix in {"+", "-", "−", "R$"} or any(category(char) == "Sc" for char in prefix):
+            if prefix in {"+", "-", "−", *CURRENCY_SYMBOLS} or any(category(char) == "Sc" for char in prefix):
                 incomplete.append((region.start - 1, end))
 
     for index, word in enumerate(row.words):
-        if index not in covered and re.search(r"[0-9]+,[0-9]+", word.text):
+        if index not in covered and word.text.lstrip("+-") in CURRENCY_SYMBOLS and index + 1 in covered:
+            following = next(region for region in regions if region.start <= index + 1 < region.end)
+            incomplete.append((index, following.end))
+        if index not in covered and (
+                re.match(r"[+-]?(?:BRL|EUR|USD)[0-9]", word.text)
+                or word.text.lstrip("+-") in CURRENCY_SYMBOLS and index + 1 < len(row.words)
+                and index + 1 not in covered and re.match(r"[+−-]?[0-9]", row.words[index + 1].text)):
+            incomplete.append((index, min(index + 2, len(row.words))))
+        if index not in covered and re.search(r"[0-9]+,[0-9]+|[0-9]+\.[0-9]{2}(?![0-9])", word.text):
             start, end = index, index + 1
             while start and start - 1 not in covered and adjacent(start - 1, start) and affix(start - 1):
                 start -= 1
@@ -170,7 +195,7 @@ def money_regions(row: Row, tolerances: Tolerances) -> tuple[MoneyRegion, ...]:
 
 def has_financial_signal(text: str) -> bool:
     # Also flag malformed cents/currency so they cannot disappear as prose.
-    return any(symbol in text for symbol in ("$", "€", "£")) or re.search(r"[0-9]+,[0-9]+", text) is not None
+    return any(symbol in text for symbol in ("$", "€", "£")) or re.search(r"[0-9]+,[0-9]+|[0-9]+\.[0-9]{2}(?![0-9])", text) is not None
 
 
 def balance_labels(text: str) -> tuple[str, ...]:

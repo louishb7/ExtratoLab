@@ -30,8 +30,11 @@ duplicates are analyzed once per actual SHA-256. See
 [Corpus Lab V1](docs/corpus-lab-v1.md) for the preserved observation workflow.
 [Research protocol](docs/corpus-research.md) adds version 2 metadata, independent
 expectations, development/evaluation separation, regression comparison and the
-12 fictitious international experiments. No engine capability was expanded in
-this product cycle; demonstrated gaps remain explicit.
+12 original fictitious international experiments and a separate adversarial
+collection. Integrated cycle 02 expands exact ISO-prefixed monetary lexemes,
+calendar-proved slash dates and ISO dates, declared debit/credit columns and
+bounded dated wraps with repeated period frames. Coverage remains a synthetic
+regression result, not evidence of universal or real-bank support.
 
 ## Historical milestones: M0 through M12 — Structural monetary roles and bounded hypotheses
 
@@ -126,11 +129,16 @@ also works on Linux without reinstalling.
    the active worker rather than starting unbounded parallel work.
 2. Review the period, explicit currency, transaction count, credit/debit counts
    and sums, and available boundary balances. Missing values stay visibly absent.
+   The analysis state (SUCCESS, AMBIGUOUS, UNSUPPORTED or INVALID) remains visible
+   independently of export readiness. At smaller resolutions or scaled DPI, the
+   window content scrolls; its minimum size is 900×600 logical pixels.
 3. Select a table row using the mouse or keyboard. **Conferência** shows the
    interpreted values, debit/credit basis and original page/line/token references.
    Resolution uses one session cache over the already extracted document; no PDF
    re-extraction occurs when selecting another row. Missing field evidence is
-   clearly identified. The table is read-only and keeps document order.
+   clearly identified. Registered page/line/token intervals remain visible even
+   when the original tokens are unavailable. Clearing the selection clears its
+   contextual evidence. The table is read-only and keeps document order.
 4. **Diagnóstico** distinguishes verified, unavailable and inapplicable controls
    and explains rejection categories without printing raw internal reasons.
 5. In **Exportação**, supply institution name/ID, bank ID, branch, account and
@@ -138,11 +146,14 @@ also works on Linux without reinstalling.
    windows. Readiness is reassessed on edits. Existing document identity cannot be
    contradicted; account metadata cannot supply a currency or missing balance.
    Metadata lives only in the session and is cleared on every new analysis.
+   The tab reports CSV and OFX readiness separately and explains missing currency,
+   missing closing balance, invalid identity or a contradiction with the PDF.
 6. **Salvar OFX** uses the existing generator and FITID rules. **Salvar CSV** uses
    the same approved interpretation gate, independently of OFX account metadata
    and its closing-balance requirement. Both actions use native dialogs, refuse
    existing files and publish complete files atomically. Unsupported hard-link
-   filesystems fail safely with a retryable error; no unsafe fallback is used.
+   filesystems (including FAT32/exFAT and some network shares) fail safely with a
+   retryable error; no unsafe fallback is used.
 
 CSV v1 is UTF-8 without BOM, comma-delimited with LF record separators, ISO
 `YYYY-MM-DD` dates, signed cent values with a decimal dot, and stable headers
@@ -211,6 +222,7 @@ Local PDF → extracted pages → visual structure → semantic candidates
           → structural operators → hypotheses → constraints + source ownership
           → interpretation + financial evidence
           → approved Statement → independent OFX readiness → provisional OFX
+                                → independent CSV readiness → CSV v1
 ```
 
 Bank parsers receive our own document model. Extraction preserves both page text
@@ -245,10 +257,11 @@ hard-link support fail explicitly; output permissions are owner-only on POSIX.
 
 The `ui/` package owns only the window, presentation and desktop entry points.
 It calls `analyze_pdf`, `assess_export_readiness`, `export_analysis` and
-`application.export.write_ofx`;
-bank parsing, PDF extraction, financial validation and OFX generation remain in
-the existing core. The transaction table follows document order for reviewing
-running balances, while the export retains M2's canonical ordering.
+the CSV/readiness and atomic publication services. `application.review` resolves
+cached source references, and `ui.worker` runs interactive analysis in one Qt
+thread. Bank parsing, PDF extraction, financial validation and serialization
+remain in the core. The transaction table and CSV follow document order for
+reviewing running balances, while OFX retains M2's canonical ordering.
 
 ## Generic structural interpretation
 
@@ -360,7 +373,9 @@ export requirements yields `EXPORT_REQUIREMENTS_MISSING`. Unapproved analysis
 yields `EXPORT_BLOCKED`. A complete profile yields `READY_TO_EXPORT`; the
 generator still detects failures such as FITID collisions at generation time.
 Metadata cannot override conflicting identity already extracted from the PDF.
-No metadata-entry form has been added.
+The desktop Exportação tab provides the session-only metadata form and reports
+specific readiness causes. Conflicting identity retains the historical
+`EXPORT_REQUIREMENTS_MISSING` status with issue `account_metadata_conflict`.
 
 `EvidenceReport` records domain validity, declared economic order, verified
 running links (including whether the first movement had an opening reference),
@@ -843,3 +858,42 @@ recipes are entirely fictitious. Export still requires explicit account identity
 Never commit real bank statements or upload confidential fixtures. Committed
 fixtures must be synthetic. `tests/private_fixtures/` is ignored and local-only.
 See [AGENTS.md](AGENTS.md) for the engineering and final-review contract.
+
+## Integrated cycle 02: verified limits
+
+The original 12 PDF recipes and financial expectations are unchanged. Correct
+approvals rose from 3/8 to 8/8 valid synthetic statements; the four negative
+cases remain rejected. Nine additional adversarial development cases are
+evaluated separately and rejected. These inspected recipes are not a blinded
+evaluation or a claim about real institutions or Athenas acceptance.
+
+Monetary support adds prefixes BRL/EUR/USD with exact two-digit cents and validated
+comma/dot grouping. Bare dot amounts, ambiguous precision, unsupported symbols
+and bare `$` remain blocked. Currency never chooses a decimal convention.
+ISO dates are direct; new international slash periods must prove one calendar
+order through their endpoints. The historical Portuguese DD/MM grammar stays
+fixed. New ambiguous slash periods, conflicting conventions, and unowned booking
+versus value dates remain blocked.
+
+Separate left-aligned debit/credit cells need a complete, distinct caption row
+and one occupied flow cell; an optional balance cell has independent ownership.
+Repeated headers must agree and be present on each page. Right-aligned columns,
+zero placeholders in both flow columns, and unknown captions need separate
+structural research. Dated description wraps need recurring description/value
+columns, bounded same-page adjacency, and no date or monetary continuation.
+The new automatic grammar does not join a description across a page boundary;
+legacy explicit composition paths remain regression oracles.
+
+CI now configures Python 3.12/3.13 on Linux/Windows and a Windows text-IO check
+with UTF-8 mode disabled and EncodingWarning treated as an error. Configuration
+is not proof of execution: this cycle ran Python 3.12 on Linux, with Qt offscreen
+at scale factors 1, 1.25 and 1.5. Native Windows, Python 3.13, window-manager
+frames, taskbar space and native dialogs still need execution on those targets.
+
+Reproduce the separate adversarial collection with the existing Corpus Lab:
+
+```bash
+python tests/fixtures/international/generate.py /local/new-adversarial-directory --cases tests/fixtures/international/adversarial.json
+pdf-to-ofx corpus analyze /local/new-adversarial-directory/corpus.jsonl -o /local/adversarial.jsonl
+pdf-to-ofx corpus report /local/adversarial.jsonl --json
+```

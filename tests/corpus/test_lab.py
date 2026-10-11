@@ -1,5 +1,8 @@
 """Real extraction of a fictitious corpus: verdicts, privacy and aggregation."""
 
+import errno
+import os
+
 from dataclasses import replace
 import hashlib
 import json
@@ -274,7 +277,10 @@ def test_report_cannot_replace_manifest_or_document(corpus_manifest, tmp_path):
     try:
         alias.symlink_to(protected)
     except (OSError, NotImplementedError) as exc:
-        pytest.skip(f"Symlink creation not supported in this environment: {exc}")
+        if (isinstance(exc, NotImplementedError) or exc.errno in {errno.ENOSYS, errno.EOPNOTSUPP}
+                or os.name == "nt" and getattr(exc, "winerror", None) == 1314):
+            pytest.skip("Symlink setup unsupported by this OS or filesystem.")
+        raise
     with pytest.raises(ValueError):
         analyze_corpus(corpus_manifest, alias)
     assert protected.read_bytes() == document_bytes

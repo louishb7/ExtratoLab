@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from conftest import LAYOUTS
+from tests.fixture_paths import LAYOUTS
 from pdf_to_ofx.application.convert import analyze_pdf, export_analysis
 from pdf_to_ofx.application.diagnose import diagnose_pdf
 from pdf_to_ofx.cli import main

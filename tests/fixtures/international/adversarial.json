@@ -1,0 +1,795 @@
+[
+  {
+    "id": "ambiguous-monetary-precision",
+    "language": "es",
+    "country": "ES",
+    "features": [
+      "ambiguous_decimal_or_group"
+    ],
+    "pages": [
+      [
+        {
+          "y": 40,
+          "cells": [
+            [
+              35,
+              "EXTRACTO FICTICIO"
+            ]
+          ]
+        },
+        {
+          "y": 62,
+          "cells": [
+            [
+              35,
+              "Periodo: 01/01/2029 a 31/01/2029"
+            ]
+          ]
+        },
+        {
+          "y": 84,
+          "cells": [
+            [
+              35,
+              "Saldo inicial: EUR 1.234"
+            ]
+          ]
+        },
+        {
+          "y": 106,
+          "cells": [
+            [
+              35,
+              "Saldo final: EUR 105,00"
+            ]
+          ]
+        },
+        {
+          "y": 128,
+          "cells": [
+            [
+              35,
+              "02/01/2029 ALFA FICTICIO +EUR 10,00"
+            ]
+          ]
+        },
+        {
+          "y": 150,
+          "cells": [
+            [
+              35,
+              "03/01/2029 BETA FICTICIO -EUR 5,00"
+            ]
+          ]
+        }
+      ]
+    ],
+    "statement": null,
+    "dataset": "development",
+    "expectation": "insufficient_evidence"
+  },
+  {
+    "id": "conflicting-currency-prefixes",
+    "language": "es",
+    "country": "ES",
+    "features": [
+      "currency_conflict"
+    ],
+    "pages": [
+      [
+        {
+          "y": 40,
+          "cells": [
+            [
+              35,
+              "EXTRACTO FICTICIO"
+            ]
+          ]
+        },
+        {
+          "y": 62,
+          "cells": [
+            [
+              35,
+              "Periodo: 01/01/2029 a 31/01/2029"
+            ]
+          ]
+        },
+        {
+          "y": 84,
+          "cells": [
+            [
+              35,
+              "Saldo inicial: EUR 100,00"
+            ]
+          ]
+        },
+        {
+          "y": 106,
+          "cells": [
+            [
+              35,
+              "Saldo final: EUR 105,00"
+            ]
+          ]
+        },
+        {
+          "y": 128,
+          "cells": [
+            [
+              35,
+              "02/01/2029 ALFA FICTICIO +USD 10.00"
+            ]
+          ]
+        },
+        {
+          "y": 150,
+          "cells": [
+            [
+              35,
+              "03/01/2029 BETA FICTICIO -EUR 5,00"
+            ]
+          ]
+        }
+      ]
+    ],
+    "statement": null,
+    "dataset": "development",
+    "expectation": "insufficient_evidence"
+  },
+  {
+    "id": "ambiguous-calendar-convention",
+    "language": "en",
+    "country": "GB",
+    "features": [
+      "ambiguous_date_order"
+    ],
+    "pages": [
+      [
+        {
+          "y": 40,
+          "cells": [
+            [
+              35,
+              "FICTITIOUS STATEMENT"
+            ]
+          ]
+        },
+        {
+          "y": 62,
+          "cells": [
+            [
+              35,
+              "Statement period: 03/04/2029 to 05/06/2029"
+            ]
+          ]
+        },
+        {
+          "y": 84,
+          "cells": [
+            [
+              35,
+              "Opening balance: USD 100.00"
+            ]
+          ]
+        },
+        {
+          "y": 106,
+          "cells": [
+            [
+              35,
+              "Closing balance: USD 105.00"
+            ]
+          ]
+        },
+        {
+          "y": 128,
+          "cells": [
+            [
+              35,
+              "01/02/2029 ALFA FICTICIO +USD 10.00"
+            ]
+          ]
+        },
+        {
+          "y": 150,
+          "cells": [
+            [
+              35,
+              "01/03/2029 BETA FICTICIO -USD 5.00"
+            ]
+          ]
+        }
+      ]
+    ],
+    "statement": null,
+    "dataset": "development",
+    "expectation": "insufficient_evidence"
+  },
+  {
+    "id": "duplicate-column-direction",
+    "language": "pt",
+    "country": "BR",
+    "features": [
+      "contradictory_headers"
+    ],
+    "pages": [
+      [
+        {
+          "y": 40,
+          "cells": [
+            [
+              35,
+              "EXTRATO INTEIRAMENTE FICTICIO"
+            ]
+          ]
+        },
+        {
+          "y": 62,
+          "cells": [
+            [
+              35,
+              "Período: 01/01/2029 a 31/01/2029"
+            ]
+          ]
+        },
+        {
+          "y": 84,
+          "cells": [
+            [
+              35,
+              "Saldo inicial: R$ 100,00"
+            ]
+          ]
+        },
+        {
+          "y": 106,
+          "cells": [
+            [
+              35,
+              "Saldo final: R$ 105,00"
+            ]
+          ]
+        },
+        {
+          "y": 145,
+          "cells": [
+            [
+              35,
+              "Data"
+            ],
+            [
+              130,
+              "Descrição"
+            ],
+            [
+              340,
+              "Débito"
+            ],
+            [
+              450,
+              "Débito"
+            ]
+          ]
+        },
+        {
+          "y": 170,
+          "cells": [
+            [
+              35,
+              "02/01/2029"
+            ],
+            [
+              130,
+              "ALFA FICTICIO"
+            ],
+            [
+              450,
+              "R$ 10,00"
+            ]
+          ]
+        },
+        {
+          "y": 195,
+          "cells": [
+            [
+              35,
+              "03/01/2029"
+            ],
+            [
+              130,
+              "BETA FICTICIO"
+            ],
+            [
+              340,
+              "R$ 5,00"
+            ]
+          ]
+        }
+      ]
+    ],
+    "statement": null,
+    "dataset": "development",
+    "expectation": "insufficient_evidence"
+  },
+  {
+    "id": "two-populated-flow-columns",
+    "language": "pt",
+    "country": "BR",
+    "features": [
+      "dual_column_ownership"
+    ],
+    "pages": [
+      [
+        {
+          "y": 40,
+          "cells": [
+            [
+              35,
+              "EXTRATO INTEIRAMENTE FICTICIO"
+            ]
+          ]
+        },
+        {
+          "y": 62,
+          "cells": [
+            [
+              35,
+              "Período: 01/01/2029 a 31/01/2029"
+            ]
+          ]
+        },
+        {
+          "y": 84,
+          "cells": [
+            [
+              35,
+              "Saldo inicial: R$ 100,00"
+            ]
+          ]
+        },
+        {
+          "y": 106,
+          "cells": [
+            [
+              35,
+              "Saldo final: R$ 105,00"
+            ]
+          ]
+        },
+        {
+          "y": 145,
+          "cells": [
+            [
+              35,
+              "Data"
+            ],
+            [
+              130,
+              "Descrição"
+            ],
+            [
+              340,
+              "Débito"
+            ],
+            [
+              450,
+              "Crédito"
+            ]
+          ]
+        },
+        {
+          "y": 170,
+          "cells": [
+            [
+              35,
+              "02/01/2029"
+            ],
+            [
+              130,
+              "ALFA FICTICIO"
+            ],
+            [
+              450,
+              "R$ 10,00"
+            ],
+            [
+              340,
+              "R$ 0,00"
+            ]
+          ]
+        },
+        {
+          "y": 195,
+          "cells": [
+            [
+              35,
+              "03/01/2029"
+            ],
+            [
+              130,
+              "BETA FICTICIO"
+            ],
+            [
+              340,
+              "R$ 5,00"
+            ]
+          ]
+        }
+      ]
+    ],
+    "statement": null,
+    "dataset": "development",
+    "expectation": "insufficient_evidence"
+  },
+  {
+    "id": "monetary-wrap-neighbor",
+    "language": "pt",
+    "country": "BR",
+    "features": [
+      "unowned_monetary_continuation"
+    ],
+    "pages": [
+      [
+        {
+          "y": 40,
+          "cells": [
+            [
+              35,
+              "EXTRATO INTEIRAMENTE FICTICIO"
+            ]
+          ]
+        },
+        {
+          "y": 62,
+          "cells": [
+            [
+              35,
+              "Período: 01/01/2029 a 31/01/2029"
+            ]
+          ]
+        },
+        {
+          "y": 84,
+          "cells": [
+            [
+              35,
+              "Saldo inicial: R$ 100,00"
+            ]
+          ]
+        },
+        {
+          "y": 106,
+          "cells": [
+            [
+              35,
+              "Saldo final: R$ 105,00"
+            ]
+          ]
+        },
+        {
+          "y": 160,
+          "cells": [
+            [
+              35,
+              "02/01/2029"
+            ],
+            [
+              140,
+              "ALFA FICTICIO"
+            ],
+            [
+              450,
+              "+R$ 10,00"
+            ]
+          ]
+        },
+        {
+          "y": 182,
+          "cells": [
+            [
+              140,
+              "REFERENCIA MULTILINHA"
+            ],
+            [
+              450,
+              "R$ 2,00"
+            ]
+          ]
+        }
+      ],
+      [
+        {
+          "y": 40,
+          "cells": [
+            [
+              35,
+              "EXTRATO INTEIRAMENTE FICTICIO"
+            ]
+          ]
+        },
+        {
+          "y": 62,
+          "cells": [
+            [
+              35,
+              "Período: 01/01/2029 a 31/01/2029"
+            ]
+          ]
+        },
+        {
+          "y": 100,
+          "cells": [
+            [
+              35,
+              "03/01/2029"
+            ],
+            [
+              140,
+              "BETA FICTICIO"
+            ],
+            [
+              450,
+              "-R$ 5,00"
+            ]
+          ]
+        }
+      ]
+    ],
+    "statement": null,
+    "dataset": "development",
+    "expectation": "insufficient_evidence"
+  },
+  {
+    "id": "cross-page-description-owner",
+    "language": "pt",
+    "country": "BR",
+    "features": [
+      "unproved_cross_page_continuation"
+    ],
+    "pages": [
+      [
+        {
+          "y": 40,
+          "cells": [
+            [
+              35,
+              "EXTRATO INTEIRAMENTE FICTICIO"
+            ]
+          ]
+        },
+        {
+          "y": 62,
+          "cells": [
+            [
+              35,
+              "Período: 01/01/2029 a 31/01/2029"
+            ]
+          ]
+        },
+        {
+          "y": 84,
+          "cells": [
+            [
+              35,
+              "Saldo inicial: R$ 100,00"
+            ]
+          ]
+        },
+        {
+          "y": 106,
+          "cells": [
+            [
+              35,
+              "Saldo final: R$ 105,00"
+            ]
+          ]
+        },
+        {
+          "y": 160,
+          "cells": [
+            [
+              35,
+              "02/01/2029"
+            ],
+            [
+              140,
+              "ALFA FICTICIO"
+            ],
+            [
+              450,
+              "+R$ 10,00"
+            ]
+          ]
+        }
+      ],
+      [
+        {
+          "y": 40,
+          "cells": [
+            [
+              35,
+              "EXTRATO INTEIRAMENTE FICTICIO"
+            ]
+          ]
+        },
+        {
+          "y": 62,
+          "cells": [
+            [
+              35,
+              "Período: 01/01/2029 a 31/01/2029"
+            ]
+          ]
+        },
+        {
+          "y": 84,
+          "cells": [
+            [
+              140,
+              "REFERENCIA MULTILINHA"
+            ]
+          ]
+        },
+        {
+          "y": 100,
+          "cells": [
+            [
+              35,
+              "03/01/2029"
+            ],
+            [
+              140,
+              "BETA FICTICIO"
+            ],
+            [
+              450,
+              "-R$ 5,00"
+            ]
+          ]
+        }
+      ]
+    ],
+    "statement": null,
+    "dataset": "development",
+    "expectation": "insufficient_evidence"
+  },
+  {
+    "id": "incompatible-euro-controls",
+    "language": "es",
+    "country": "ES",
+    "features": [
+      "contradictory_boundary_control"
+    ],
+    "pages": [
+      [
+        {
+          "y": 40,
+          "cells": [
+            [
+              35,
+              "EXTRACTO FICTICIO"
+            ]
+          ]
+        },
+        {
+          "y": 62,
+          "cells": [
+            [
+              35,
+              "Periodo: 01/01/2029 a 31/01/2029"
+            ]
+          ]
+        },
+        {
+          "y": 84,
+          "cells": [
+            [
+              35,
+              "Saldo inicial: EUR 100,00"
+            ]
+          ]
+        },
+        {
+          "y": 106,
+          "cells": [
+            [
+              35,
+              "Saldo final: EUR 106,00"
+            ]
+          ]
+        },
+        {
+          "y": 128,
+          "cells": [
+            [
+              35,
+              "02/01/2029 ALFA FICTICIO +EUR 10,00"
+            ]
+          ]
+        },
+        {
+          "y": 150,
+          "cells": [
+            [
+              35,
+              "03/01/2029 BETA FICTICIO -EUR 5,00"
+            ]
+          ]
+        }
+      ]
+    ],
+    "statement": null,
+    "dataset": "development",
+    "expectation": "insufficient_evidence"
+  },
+  {
+    "id": "iso-movement-outside-scope",
+    "language": "fr",
+    "country": "FR",
+    "features": [
+      "out_of_period_date"
+    ],
+    "pages": [
+      [
+        {
+          "y": 40,
+          "cells": [
+            [
+              35,
+              "RELEVE FICTIF"
+            ]
+          ]
+        },
+        {
+          "y": 62,
+          "cells": [
+            [
+              35,
+              "Période: 2029-01-01 au 2029-01-31"
+            ]
+          ]
+        },
+        {
+          "y": 84,
+          "cells": [
+            [
+              35,
+              "Solde initial: EUR 100,00"
+            ]
+          ]
+        },
+        {
+          "y": 106,
+          "cells": [
+            [
+              35,
+              "Solde final: EUR 105,00"
+            ]
+          ]
+        },
+        {
+          "y": 128,
+          "cells": [
+            [
+              35,
+              "2029-02-02 ALFA FICTICIO +EUR 10,00"
+            ]
+          ]
+        },
+        {
+          "y": 150,
+          "cells": [
+            [
+              35,
+              "2029-01-03 BETA FICTICIO -EUR 5,00"
+            ]
+          ]
+        }
+      ]
+    ],
+    "statement": null,
+    "dataset": "development",
+    "expectation": "insufficient_evidence"
+  }
+]

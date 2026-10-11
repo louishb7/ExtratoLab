@@ -50,6 +50,10 @@ class MissingOFXMetadataError(OFXGenerationError):
     """Explicit bank/account metadata is incomplete."""
 
 
+class OFXMetadataConflictError(OFXGenerationError):
+    """Export identity contradicts the account evidenced by the statement."""
+
+
 class MissingOFXRequirementsError(OFXGenerationError):
     """A non-identity requirement of the export format is unavailable."""
 

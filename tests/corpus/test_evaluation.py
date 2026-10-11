@@ -147,3 +147,42 @@ def test_untrusted_evaluation_labels_are_never_rendered(research, tmp_path, fiel
     report = aggregate_report(output)
     assert report["input_errors"] == {"report_invalid": 1}
     assert "PRIVATE SENTINEL" not in json.dumps(report)
+
+
+@pytest.mark.parametrize("dataset", [[], {}, ["PRIVATE SENTINEL"], {"PRIVATE SENTINEL": 1}])
+def test_invalid_dataset_type_is_a_row_error_and_batch_continues(research, tmp_path, dataset):
+    manifest, _, entry, _ = research
+    with pytest.raises(ValueError):
+        CorpusEntry.from_dict(dict(entry, dataset=dataset))
+    manifest.write_text(json.dumps(dict(entry, dataset=dataset)) + "\n" + json.dumps(entry) + "\n",
+                        encoding="utf-8")
+    output = tmp_path / "run.jsonl"
+    summary = analyze_corpus(manifest, output)
+    assert summary.entries == 2 and summary.input_errors == 1 and summary.analyzed == 1
+    report = aggregate_report(output)
+    assert report["input_errors"] == {"manifest_invalid": 1}
+    assert report["evaluation"]["classifications"]["correct_approval"] == 1
+    assert "PRIVATE SENTINEL" not in output.read_text(encoding="utf-8")
+
+
+def test_structural_family_leaks_excluded_from_both_dataset_metrics(research, tmp_path):
+    from pathlib import Path
+    manifest, _, entry, truth = research
+    # Distinct PDF bytes and identical declared structure: exact dedup alone
+    # cannot protect independent evaluation from a development-family leak.
+    other = tmp_path / "equivalent.pdf"
+    other.write_bytes(Path(entry["local_path"]).read_bytes() + b"\n% synthetic equivalent copy\n")
+    other_truth = tmp_path / "equivalent.truth.json"
+    other_truth.write_text(json.dumps(dict(truth, sha256=file_sha256(other))), encoding="utf-8")
+    held_out = dict(entry, dataset="evaluation", local_path=str(other), ground_truth_path=other_truth.name)
+    manifest.write_text(json.dumps(entry) + "\n" + json.dumps(held_out) + "\n", encoding="utf-8")
+    output = tmp_path / "run.jsonl"
+    assert analyze_corpus(manifest, output).analyzed == 2
+    evaluation = aggregate_report(output)["evaluation"]
+    assert evaluation["classifications"]["correct_approval"] == 2
+    assert evaluation["exact_split_leaks"] == 0
+    assert evaluation["declared_family_split_leaks"] == 1
+    for metrics in evaluation["by_dataset"].values():
+        assert metrics["excluded_split_leak_documents"] == 1
+        assert metrics["correct_coverage"] is metrics["approval_precision"] is None
+        assert sum(metrics["classifications"].values()) == 0

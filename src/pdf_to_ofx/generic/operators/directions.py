@@ -26,6 +26,20 @@ class DirectionEvidence:
 def infer_direction(segment: TransactionSegment, roles: AmountRoles, mode: AmountMode,
                     candidates: tuple[RowCandidate, ...], tolerances: Tolerances,
                     *, carry_across_pages: bool) -> DirectionEvidence:
+    head = segment.rows[0]
+    if head.column_header is not None:
+        index = head.amounts.index(roles.movement)
+        role = head.column_roles[index]
+        if role not in {"debit", "credit"}:
+            raise OperatorFailure("column_ownership", "A balance column cannot supply movement direction.")
+        sign = -1 if role == "debit" else 1
+        money = roles.movement.money
+        if ((money.explicit_sign or money.marker) and (-1 if money.amount.is_signed() else 1) != sign):
+            raise OperatorFailure("column_direction_conflict", "Monetary sign contradicts its declared column.")
+        header = head.column_header
+        word = header.roles.index(role) + 2
+        owner = RowCandidate(-1, header.row, (), (), "column_header")
+        return DirectionEvidence(sign, "debit_credit_column", owner, word, word + 1)
     if mode != AmountMode.GROUP_SUBTOTAL:
         movement = roles.movement
         money = movement.money

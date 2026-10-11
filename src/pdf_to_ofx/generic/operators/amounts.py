@@ -140,7 +140,13 @@ def amount_role_candidates(segment: TransactionSegment, geometry: LayoutProfile,
         return ()
     if constraint and size != (2 if constraint.balance_mode == BalanceMode.RUNNING else 1):
         return ()
+    head = segment.rows[0]
     columns = (constraint.movement_column,) if constraint else range(size)
+    if head.column_roles:
+        movement = next(i for i, role in enumerate(head.column_roles) if role in {"debit", "credit"})
+        if constraint and constraint.movement_column != movement:
+            return ()
+        columns = (movement,)
     output = []
     for column in columns:
         profile = replace(geometry, balance_mode=BalanceMode.RUNNING if size == 2 else BalanceMode.ABSENT,

@@ -6,7 +6,7 @@ import re
 
 from pdf_to_ofx.domain.errors import StatementParseError
 from pdf_to_ofx.generic.operators.candidates import _flow, _period, _stamp, leading_date
-from pdf_to_ofx.generic.operators.pages import contact_footer_rows
+from pdf_to_ofx.generic.operators.pages import contact_footer_rows, continue_pages
 from pdf_to_ofx.generic.operators.transactions import semantic_candidates
 from pdf_to_ofx.generic.profile import AmountMode, BalanceMode, DateMode, LayoutProfile
 from pdf_to_ofx.generic.semantics import has_financial_signal, money_regions
@@ -34,10 +34,52 @@ def observe_geometry(document: ExtractedDocument, supplied: LayoutProfile | None
         not c.amounts[0].money.explicit_sign and not c.amounts[0].money.marker for c in movements) else (
             AmountMode.CREDIT_DEBIT_MARKER if markers else AmountMode.SIGNED)
     balance = BalanceMode.RUNNING if any(len(c.amounts) == 2 for c in movements) else BalanceMode.ABSENT
-    return replace(base, date_mode=DateMode.GROUPED if grouped else DateMode.PER_TRANSACTION,
+    base = replace(base, date_mode=DateMode.GROUPED if grouped else DateMode.PER_TRANSACTION,
                    amount_mode=mode, balance_mode=balance, balance_column=1 if balance == BalanceMode.RUNNING else None,
                    carry_date_across_pages=grouped, transaction_left=min((c.row.words[0].x0 for c in movements), default=0)
                    if mode == AmountMode.GROUP_SUBTOTAL else None)
+    return observe_dated_geometry(rows, base) if not grouped else base
+
+
+def observe_dated_geometry(rows: tuple[Row, ...], base: LayoutProfile) -> LayoutProfile:
+    """Require recurring dated description/value columns before joining lines.
+
+    Only identical nonfinancial prefixes containing the explicit period are
+    page frames. Continuations remain on their movement's page in this grammar.
+    """
+    pages = [list(group) for _, group in groupby(rows, key=lambda row: row.page)]
+    header = 0
+    if len(pages) > 1:
+        while all(len(page) > header and page[header].text == pages[0][header].text for page in pages):
+            row = pages[0][header]
+            if not _period(row) and (has_financial_signal(row.text) or leading_date(row)):
+                break
+            header += 1
+        if not any(_period(row) for row in pages[0][:header]):
+            header = 0
+    profile = replace(base, repeated_header_rows=header)
+    retained = continue_pages(rows, profile)
+    candidates = semantic_candidates(retained, profile)
+    movements = [candidate for candidate in candidates if candidate.kind == "content" and candidate.dates and candidate.amounts]
+    if len(movements) < 2 or any(len(candidate.dates) != 1 or candidate.dates[0].start != 0 for candidate in movements):
+        return profile
+    description_left = []
+    for candidate in movements:
+        row = candidate.row
+        begin, end = candidate.dates[0].end, candidate.amounts[0].start
+        if (begin >= end or row.words[begin].x0 - row.words[begin - 1].x1 <= profile.tolerances.token_gap
+                or row.words[end].x0 - row.words[end - 1].x1 <= profile.tolerances.token_gap):
+            return profile
+        description_left.append(row.words[begin].x0)
+    left = description_left[0]
+    if any(abs(value - left) > profile.tolerances.row_y for value in description_left):
+        return profile
+    if any(candidate.kind == "content" and not candidate.dates and not candidate.amounts
+           and abs(candidate.row.words[0].x0 - left) <= profile.tolerances.row_y for candidate in candidates):
+        return replace(profile, transaction_left=min(candidate.row.words[0].x0 for candidate in movements), continuation_left=left, same_page_continuations=True)
+    return profile
+
+
 def observe_grouped_geometry(rows: tuple[Row, ...], tolerances: Tolerances) -> LayoutProfile | None:
     """Observe the established flow grammar's frames and description boundaries.
 

@@ -60,6 +60,8 @@ def test_failed_analysis_has_distinct_status_and_clears_all_previous_export_stat
     assert window.table.rowCount() == 0
     assert all(label.text() == "—" for label in window.summary_labels.values())
     assert expected in window.status_label.text()
+    assert status.value.upper() in window.analysis_status_label.text()
+    assert "OFX e CSV bloqueados" in window.export_status_label.text()
     assert "SENSITIVE" not in window.status_label.text()
     assert not window.save_button.isEnabled()
     with patch("pdf_to_ofx.ui.main_window.QFileDialog.getSaveFileName") as dialog:

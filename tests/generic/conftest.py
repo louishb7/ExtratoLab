@@ -1,13 +1,11 @@
 """Fictitious positioned documents and real extraction of structural recipes."""
 
 import importlib.util
-from pathlib import Path
 
 import pytest
 
 from pdf_to_ofx.pdf.document import ExtractedDocument, ExtractedPage, Word
-
-LAYOUTS = Path(__file__).parents[1] / "fixtures" / "layouts"
+from tests.fixture_paths import LAYOUTS
 
 
 @pytest.fixture

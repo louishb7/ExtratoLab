@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from conftest import LAYOUTS
+from tests.fixture_paths import LAYOUTS
 from pdf_to_ofx.application.convert import analyze_pdf, assess_export_readiness, export_analysis, ExportStatus
 from pdf_to_ofx.domain.evidence import AnalysisStatus, EvidenceStatus
 from pdf_to_ofx.generic.inference import infer_layout

@@ -170,9 +170,16 @@ def test_minimum_window_keeps_summary_and_export_form_usable(window, synthetic_p
     window.load_pdf(synthetic_pdf)
     window.resize(900,680)
     qapp.processEvents()
-    assert window.width() >= 1000 and window.height() >= 800
+    assert window.width() == 900 and window.height() == 680
+    assert window.content_scroll.verticalScrollBar().maximum() > 0
     assert window.summary_labels["bank"].height() >= 40
     assert all(field.minimumHeight() >= 30 for field in window.metadata_fields.values())
+    window.tabs.setCurrentIndex(2)
+    window.content_scroll.ensureWidgetVisible(window.tabs)
+    qapp.processEvents()
+    # Main review/export area can be reached within the viewport at 900x680.
+    center = window.tabs.mapTo(window.content_scroll.viewport(), window.tabs.rect().center())
+    assert window.content_scroll.viewport().rect().contains(center)
 
 
 def test_display_totals_never_round_under_restricted_decimal_context(window, synthetic_pdf):
@@ -194,3 +201,22 @@ def test_financial_contradiction_has_actionable_diagnosis():
                                                 blocking_capabilities=("checkpoint_reconciliation",)))
     assert "saldos de controle" in message and "soma dos lançamentos" in message
     assert "capacidade estrutural necessária ainda está ausente" not in message
+
+
+def test_deselection_clears_contextual_evidence(window, synthetic_pdf):
+    window.load_pdf(synthetic_pdf)
+    window.table.selectRow(0)
+    assert "Página" in window.details.toPlainText()
+    window.table.clearSelection()
+    assert "Selecione" in window.details.toPlainText()
+
+
+def test_registered_location_remains_visible_without_cached_tokens(window, synthetic_pdf):
+    analysis = replace(analyze_pdf(synthetic_pdf), document=None)
+    with patch("pdf_to_ofx.ui.main_window.analyze_pdf", return_value=analysis):
+        window.load_pdf(synthetic_pdf)
+    window.table.selectRow(0)
+    text = window.details.toPlainText()
+    span = analysis.provenance.transactions[0].amount_source
+    assert f"Página {span.page}" in text and f"{span.word_start}:{span.word_end}" in text
+    assert "tokens indisponíveis nesta sessão" in text

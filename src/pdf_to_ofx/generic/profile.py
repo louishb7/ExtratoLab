@@ -38,11 +38,12 @@ class LayoutProfile:
     continuation_left: float | None = None
     repeated_header_rows: int = 0
     trailing_note_rows: int = 0
+    same_page_continuations: bool = False
 
     def __post_init__(self) -> None:
         if (not isinstance(self.date_mode, DateMode) or not isinstance(self.amount_mode, AmountMode)
                 or not isinstance(self.balance_mode, BalanceMode) or not isinstance(self.tolerances, Tolerances)
-                or type(self.carry_date_across_pages) is not bool
+                or type(self.carry_date_across_pages) is not bool or type(self.same_page_continuations) is not bool
                 or type(self.footer_rows) is not int or self.footer_rows < 0
                 or type(self.movement_column) is not int):
             raise ValueError("Invalid structural layout profile.")
@@ -69,7 +70,11 @@ class LayoutProfile:
             raise ValueError("Trailing notes require an explicit transaction boundary.")
 
     def to_json(self) -> str:
-        return json.dumps({"version": 1, **asdict(self)}, ensure_ascii=True, sort_keys=True)
+        fields = asdict(self)
+        # Preserve byte-for-byte serialization of historical profiles.
+        if not self.same_page_continuations:
+            fields.pop("same_page_continuations")
+        return json.dumps({"version": 1, **fields}, ensure_ascii=True, sort_keys=True)
 
     @classmethod
     def from_json(cls, text: str) -> "LayoutProfile":
@@ -77,7 +82,7 @@ class LayoutProfile:
             fields = json.loads(text, object_pairs_hook=_unique_keys)
             required = {"date_mode", "amount_mode", "balance_mode"}
             allowed = required | {"version", "movement_column", "balance_column", "carry_date_across_pages", "footer_rows", "tolerances"}
-            allowed |= {"transaction_left", "continuation_left", "repeated_header_rows", "trailing_note_rows"}
+            allowed |= {"transaction_left", "continuation_left", "repeated_header_rows", "trailing_note_rows", "same_page_continuations"}
             if (not isinstance(fields, dict) or not required <= fields.keys()
                     or not fields.keys() <= allowed or type(fields.get("version", 1)) is not int
                     or fields.get("version", 1) != 1):

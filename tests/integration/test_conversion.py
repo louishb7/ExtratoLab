@@ -1,3 +1,5 @@
+import errno
+import os
 from collections.abc import Callable
 from decimal import Decimal
 from pathlib import Path
@@ -159,7 +161,10 @@ def test_cli_refuses_output_symlink(synthetic_pdf: Path, tmp_path: Path) -> None
     try:
         output.symlink_to(target)
     except (OSError, NotImplementedError) as exc:
-        pytest.skip(f"Symlink creation not supported in this environment: {exc}")
+        if (isinstance(exc, NotImplementedError) or exc.errno in {errno.ENOSYS, errno.EOPNOTSUPP}
+                or os.name == "nt" and getattr(exc, "winerror", None) == 1314):
+            pytest.skip("Symlink setup unsupported by this OS or filesystem.")
+        raise
     assert main([str(synthetic_pdf), "-o", str(output)]) == 1
     assert target.read_text(encoding="ascii") == "existing export"
 

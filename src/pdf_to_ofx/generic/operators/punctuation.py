@@ -1,6 +1,6 @@
 """Bind wrapped description punctuation using columns and signed flow owners."""
 
-from pdf_to_ofx.generic.operators.candidates import _flow, date_candidates
+from pdf_to_ofx.generic.operators.candidates import _flow, date_candidates, document_date_order
 from pdf_to_ofx.generic.semantics import has_financial_signal, scan_money_regions
 from pdf_to_ofx.generic.structure import Row, Tolerances
 
@@ -14,12 +14,13 @@ def description_separators(rows: tuple[Row, ...], tolerances: Tolerances) -> set
     separator remains in the description and its original provenance.
     """
     output = set()
+    order = document_date_order(rows)
     flow_page = None
     for index, row in enumerate(rows):
-        if _flow(row, tolerances) is not None:
+        if _flow(row, tolerances, order=order) is not None:
             flow_page = row.page
             continue
-        if date_candidates(row):
+        if date_candidates(row, order=order):
             flow_page = None
         if flow_page != row.page or index + 1 == len(rows):
             continue
@@ -28,7 +29,7 @@ def description_separators(rows: tuple[Row, ...], tolerances: Tolerances) -> set
             continue
         amount = scan.regions[0]
         following = rows[index + 1]
-        if (following.page != row.page or date_candidates(following)
+        if (following.page != row.page or date_candidates(following, order=order)
                 or has_financial_signal(following.text)
                 or following.words[0].top - row.words[-1].bottom > tolerances.summary_y
                 or following.words[-1].x1 >= amount.x0 - tolerances.token_gap):

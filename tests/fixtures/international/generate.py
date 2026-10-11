@@ -6,12 +6,12 @@ from pathlib import Path
 from reportlab.pdfgen.canvas import Canvas
 
 
-def generate(output: Path) -> Path:
+def generate(output: Path, *, cases_path: Path | None = None) -> Path:
     if output.exists() and any(output.iterdir()):
         raise FileExistsError("Use a new or empty directory.")
     output.mkdir(parents=True, exist_ok=True)
     entries = []
-    cases = json.loads(Path(__file__).with_name("cases.json").read_text(encoding="utf-8"))
+    cases = json.loads((cases_path or Path(__file__).with_name("cases.json")).read_text(encoding="utf-8"))
     for case in cases:
         path = output / (case["id"] + ".pdf")
         canvas = Canvas(str(path), pagesize=(595, 842), invariant=1, pageCompression=0)
@@ -45,4 +45,6 @@ def generate(output: Path) -> Path:
 if __name__ == "__main__":
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument("output",type=Path)
-    generate(parser.parse_args().output)
+    parser.add_argument("--cases", type=Path, help="Optional fictitious recipe collection")
+    args = parser.parse_args()
+    generate(args.output, cases_path=args.cases)

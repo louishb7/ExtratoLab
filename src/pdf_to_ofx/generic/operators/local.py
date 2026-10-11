@@ -77,7 +77,7 @@ def transaction_candidates(prepared: CompositionInput, constraint: LayoutProfile
                     decisions.append(RoleDecision(coverage.span(segment.rows[0].row, roles.movement.start, roles.movement.end),
                         FinancialRole.MOVEMENT, 'transaction_segment', False, error.capability, (date_source,)))
                     continue
-                witnesses = (date_source, *canonical_sources(tuple(coverage.span(row, begin, end) for row, begin, end in description)))
+                witnesses = (coverage.span(direction.source_row.row, direction.word_start, direction.word_end), date_source, *canonical_sources(tuple(coverage.span(row, begin, end) for row, begin, end in description)))
                 evidence = tuple(RoleDecision(coverage.span(segment.rows[0].row, region.start, region.end),
                     role, 'transaction_segment', True, 'dated_described_movement' if role == FinancialRole.MOVEMENT
                     else 'distinct_region_in_dated_described_segment', witnesses)

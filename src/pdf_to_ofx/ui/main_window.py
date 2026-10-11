@@ -19,7 +19,7 @@ from pdf_to_ofx.application.export import write_ofx, write_csv
 from pdf_to_ofx.application.csv_export import assess_csv_readiness, export_csv_analysis
 from pdf_to_ofx.ofx.generator import OFXProfile
 from pdf_to_ofx.application.review import ReviewSession
-from pdf_to_ofx.ui.presentation import diagnostic_text, DIRECTIONS, movement_totals
+from pdf_to_ofx.ui.presentation import diagnostic_text, DIRECTIONS, movement_totals, export_issue_text
 from pdf_to_ofx.ui.worker import AnalysisWorker
 from pdf_to_ofx.domain.errors import (
     OFXGenerationError, PDFExtractionError, StatementParseError,
@@ -71,14 +71,19 @@ class MainWindow(QMainWindow):
         self._closing = False
         self.setWindowTitle("ExtratoLab")
         self.resize(1180, 820)
-        self.setMinimumSize(1000, 800)
+        self.setMinimumSize(900, 600)
         self.setAcceptDrops(True)
 
         central = QWidget()
         layout = QVBoxLayout(central)
         layout.setContentsMargins(24, 24, 24, 24)
         layout.setSpacing(16)
-        self.setCentralWidget(central)
+        # Keep controls reachable at smaller desktop resolutions and scaled DPI.
+        self.content_scroll = QScrollArea()
+        self.content_scroll.setWidgetResizable(True)
+        self.content_scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        self.content_scroll.setWidget(central)
+        self.setCentralWidget(self.content_scroll)
 
         title = QLabel("ExtratoLab  /  Conferência financeira")
         title.setObjectName("brand")
@@ -132,6 +137,10 @@ class MainWindow(QMainWindow):
         self.file_label.setTextFormat(Qt.TextFormat.PlainText)
         self.file_label.setWordWrap(True)
         layout.addWidget(self.file_label)
+        self.analysis_status_label = QLabel("Análise: aguardando documento")
+        self.analysis_status_label.setAccessibleName("Estado da interpretação")
+        self.analysis_status_label.setWordWrap(True)
+        layout.addWidget(self.analysis_status_label)
 
         summary = QGroupBox("Resumo financeiro")
         grid = QGridLayout(summary)
@@ -139,7 +148,7 @@ class MainWindow(QMainWindow):
         grid.setVerticalSpacing(8)
         self.summary_labels: dict[str, QLabel] = {}
         fields = (
-            ("bank", "Banco / layout"), ("period", "Período"),
+            ("bank", "Instituição"), ("period", "Período"),
             ("count", "Lançamentos"), ("credits", "Créditos"),
             ("debits", "Débitos"), ("opening", "Saldo inicial"),
             ("closing", "Saldo final"), ("validation", "Validação"),
@@ -163,12 +172,14 @@ class MainWindow(QMainWindow):
         self.table.setHorizontalHeaderLabels(["Data", "Descrição", "Tipo", "Valor", "Saldo após lançamento"])
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.table.setAlternatingRowColors(True)
         self.table.verticalHeader().hide()
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
         header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         splitter = QSplitter(Qt.Orientation.Horizontal)
+        splitter.setMinimumHeight(240)
         splitter.addWidget(self.table)
         self.tabs = QTabWidget()
         self.details = QTextBrowser()
@@ -184,6 +195,10 @@ class MainWindow(QMainWindow):
         export_note = QLabel("OFX exige dados bancários, moeda resolvida e saldo final. CSV exporta a interpretação aprovada sem dados bancários; campos ausentes ficam vazios. Os metadados valem apenas nesta sessão.")
         export_note.setWordWrap(True)
         export_layout.addWidget(export_note)
+        self.export_status_label = QLabel("A prontidão de cada formato aparecerá após a análise.")
+        self.export_status_label.setWordWrap(True)
+        self.export_status_label.setAccessibleName("Prontidão OFX e CSV")
+        export_layout.addWidget(self.export_status_label)
         export_layout.addWidget(self.metadata_group)
         export_layout.addStretch()
         export_scroll = QScrollArea()
@@ -205,9 +220,6 @@ class MainWindow(QMainWindow):
         self.status_label.setWordWrap(True)
         self.status_label.setAccessibleName("Status da análise")
         layout.addWidget(self.status_label)
-        notice = QLabel("Compatibilidade com Athenas ainda não validada.")
-        notice.setWordWrap(True)
-        layout.addWidget(notice)
         self.setStyleSheet("""
             QMainWindow { background: #f3f6f8; }
             QWidget { color: #203648; font-size: 13px; }
@@ -243,6 +255,8 @@ class MainWindow(QMainWindow):
         self.analysis = None
         self.export_readiness = None
         self.export_metadata = None
+        self.analysis_status_label.setText("Análise: aguardando documento")
+        self.export_status_label.setText("A prontidão de cada formato aparecerá após a análise.")
         for field in self.metadata_fields.values():
             field.blockSignals(True)
             field.clear()
@@ -261,6 +275,8 @@ class MainWindow(QMainWindow):
 
     def _error(self, message: str) -> None:
         self.status_label.setText("Erro: " + message)
+        if self.analysis is None:
+            self.analysis_status_label.setText("Análise: não concluída")
 
     def select_pdf(self) -> None:
         filename, _ = QFileDialog.getOpenFileName(self, "Selecionar extrato PDF", "", "Arquivos PDF (*.pdf)")
@@ -279,6 +295,7 @@ class MainWindow(QMainWindow):
             return
         self.file_label.setText(path.name + " · analisando")
         self.status_label.setText("Processando PDF localmente…")
+        self.analysis_status_label.setText("Análise: em andamento")
         if background:
             if self._worker is not None:
                 self._pending = (request_id, path)
@@ -327,8 +344,14 @@ class MainWindow(QMainWindow):
             return
         self.analysis = analysis
         self.file_label.setText(path.name)
+        labels = {AnalysisStatus.SUCCESS: "SUCCESS · interpretação aprovada",
+                  AnalysisStatus.AMBIGUOUS: "AMBIGUOUS · interpretação ambígua",
+                  AnalysisStatus.UNSUPPORTED: "UNSUPPORTED · capacidade estrutural ausente",
+                  AnalysisStatus.INVALID: "INVALID · inconsistência identificada"}
+        self.analysis_status_label.setText("Análise: " + labels[analysis.status])
         self.diagnostics.setPlainText(diagnostic_text(analysis))
         if analysis.status != AnalysisStatus.SUCCESS:
+            self.export_status_label.setText("OFX e CSV bloqueados: a interpretação não foi aprovada.")
             self._error(diagnostic_text(analysis).splitlines()[0])
             self.tabs.setCurrentIndex(1)
             return
@@ -353,7 +376,8 @@ class MainWindow(QMainWindow):
 
     def _show_selection(self):
         row = self.table.currentRow()
-        if self.analysis is None or self.analysis.statement is None or self.review_session is None or row < 0:
+        if (self.analysis is None or self.analysis.statement is None or self.review_session is None
+                or row < 0 or not self.table.selectedItems()):
             self.details.setPlainText("Selecione uma movimentação para conferir os campos e a origem no PDF.")
             return
         transaction = self.analysis.statement.transactions[row]
@@ -375,11 +399,11 @@ class MainWindow(QMainWindow):
                         lines.append("Evidência individual não disponível.")
                         continue
                     resolved = self.review_session.resolve(span)
+                    basis = "linha de texto" if span.basis == "text_line" else "linha visual"
+                    lines.append(f"Página {span.page} · {basis} {span.row} · tokens {span.word_start}:{span.word_end}")
                     if resolved.tokens is None:
                         lines.append("Referência registrada; tokens indisponíveis nesta sessão.")
                     else:
-                        basis = "linha de texto" if span.basis == "text_line" else "linha visual"
-                        lines.append(f"Página {span.page} · {basis} {span.row} · tokens {span.word_start}:{span.word_end}")
                         lines.append(" ".join(resolved.tokens))
         self.details.setPlainText("\n".join(lines))
 
@@ -399,16 +423,21 @@ class MainWindow(QMainWindow):
             return
         self.export_readiness = assess_export_readiness(self.analysis, self.export_metadata)
         status = self.export_readiness.status
+        csv_ready = assess_csv_readiness(self.analysis).status == ExportStatus.READY_TO_EXPORT
+        csv_text = "CSV pronto para salvar." if csv_ready else "CSV bloqueado pela validação da interpretação."
+        ofx_text = "OFX pronto para salvar." if status == ExportStatus.READY_TO_EXPORT else export_issue_text(self.export_readiness.issues)
+        self.export_status_label.setText(csv_text + "\n" + ofx_text)
         if status == ExportStatus.EXPORT_METADATA_REQUIRED:
             self.metadata_group.show()
             self.status_label.setText("Extrato interpretado. São necessários dados bancários adicionais para gerar o OFX.")
         elif status != ExportStatus.READY_TO_EXPORT:
-            self.status_label.setText("Extrato interpretado. Faltam requisitos válidos para exportar, como o saldo final ou dados bancários consistentes.")
+            self.status_label.setText("Extrato interpretado. " + ofx_text)
         else:
             try:
                 ofx = export_analysis(self.analysis, self.export_metadata)
             except OFXGenerationError:
                 self.export_readiness = ExportReadiness(ExportStatus.EXPORT_REQUIREMENTS_MISSING, ("generation_failed",))
+                self.export_status_label.setText(csv_text + "\n" + export_issue_text(self.export_readiness.issues))
                 self._error("Extrato interpretado, mas não foi possível gerar o OFX com segurança.")
                 return
             self.conversion_result = ConversionResult(self.analysis.bank_name, self.analysis.statement, ofx)
@@ -432,7 +461,7 @@ class MainWindow(QMainWindow):
         if evidence.group_subtotals_verified == EvidenceStatus.VERIFIED:
             validation += "; subtotais verificados"
         values = {
-            "bank": f"{result.bank_name} / {statement.layout_id}",
+            "bank": result.bank_name,
             "period": f"{statement.period_start:%d/%m/%Y} a {statement.period_end:%d/%m/%Y}",
             "count": str(len(statement.transactions)),
             "credits": str(sum(t.amount > 0 for t in statement.transactions)),

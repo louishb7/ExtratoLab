@@ -13,7 +13,7 @@ from xml.etree import ElementTree as ET
 
 from pdf_to_ofx.domain.errors import (
     MissingOFXMetadataError, MissingOFXRequirementsError, OFXGenerationError,
-    OFXCurrencyConflictError, UnresolvedCurrencyError,
+    OFXCurrencyConflictError, OFXMetadataConflictError, UnresolvedCurrencyError,
 )
 from pdf_to_ofx.domain.models import BankAccount, Statement, Transaction
 from pdf_to_ofx.validation.statement import validate_statement
@@ -91,7 +91,7 @@ def _resolve_profile(statement: Statement, profile: OFXProfile | None) -> OFXPro
                 or profile.organization.strip().casefold() == "synthetic bank"):
             raise OFXGenerationError("Synthetic account metadata cannot be used for a real bank.")
         if statement.account is not None and replace(profile, currency=None) != account_profile(statement.account):
-            raise OFXGenerationError("Export profile contradicts the statement account metadata.")
+            raise OFXMetadataConflictError("Export profile contradicts the statement account metadata.")
     return profile
 
 
