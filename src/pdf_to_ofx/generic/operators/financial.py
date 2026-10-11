@@ -44,11 +44,14 @@ def checkpoint_candidates(prepared: CompositionInput, hypothesis: StructuralHypo
             cut = count - domain.boundary if hypothesis.chronology == Chronology.DESCENDING else domain.boundary
             points.append(BalanceCheckpoint(cut, domain.region.money.amount, "sparse_checkpoint", domain.source))
     for candidate in prepared.candidates:
-        if candidate.kind == "checkpoint":
+        if candidate.kind in {"checkpoint", "column_total"}:
             cut = sum(s.position < candidate.position for s in prepared.segments)
             if hypothesis.chronology == Chronology.DESCENDING:
                 cut = count - cut
-            region = candidate.amounts[0]
+            region = (next((region for region, role in zip(candidate.amounts, candidate.column_roles, strict=True)
+                            if role == "balance"), None) if candidate.kind == "column_total" else candidate.amounts[0])
+            if region is None:
+                continue
             points.append(BalanceCheckpoint(cut, region.money.amount, "sparse_checkpoint",
                                             coverage.span(candidate.row, region.start, region.end)))
         elif candidate.kind == "date_heading" and candidate.amounts and dates is not None:

@@ -1,4 +1,4 @@
-"""Explicit left-aligned debit/credit cells, independent of institution or totals."""
+"""Explicit edge-aligned debit/credit cells, independent of institution or totals."""
 from dataclasses import dataclass
 
 from pdf_to_ofx.generic.operators.candidates import OperatorFailure
@@ -10,6 +10,8 @@ CAPTIONS = {
     'débito': 'debit', 'débitos': 'debit', 'debito': 'debit', 'debit': 'debit',
     'crédito': 'credit', 'créditos': 'credit', 'credito': 'credit', 'credit': 'credit',
     'saldo': 'balance', 'balance': 'balance', 'solde': 'balance',
+    'deposit': 'credit', 'deposits': 'credit', 'credits': 'credit',
+    'withdrawal': 'debit', 'withdrawals': 'debit', 'debits': 'debit',
 }
 
 
@@ -18,21 +20,30 @@ class ColumnHeader:
     row: Row
     roles: tuple[str, ...]
 
-    def bind(self, amounts: tuple[MoneyRegion, ...], tolerances: Tolerances) -> tuple[str, ...]:
+    def bind(self, amounts: tuple[MoneyRegion, ...], tolerances: Tolerances, *, totals: bool = False) -> tuple[str, ...]:
         roles = []
-        anchors = [word.x0 for word in self.row.words]
         for amount in amounts:
             owners = []
             for index, role in enumerate(self.roles, 2):
-                left = (anchors[index - 1] + anchors[index]) / 2
-                right = (anchors[index] + anchors[index + 1]) / 2 if index + 1 < len(anchors) else None
-                if (abs(amount.x0 - anchors[index]) <= tolerances.row_y and amount.x0 > left
-                        and (right is None or amount.x1 < right)):
+                words = self.row.words
+                left = (words[index - 1].x0 + words[index].x0) / 2
+                right = (words[index].x0 + words[index + 1].x0) / 2 if index + 1 < len(words) else None
+                left_aligned = (abs(amount.x0 - words[index].x0) <= tolerances.row_y
+                                and amount.x0 > left and (right is None or amount.x1 < right))
+                # Right-edge alignment is separate evidence. A wide value may
+                # not reach the preceding caption/cell or the following column.
+                right_aligned = (abs(amount.x1 - words[index].x1) <= tolerances.row_y
+                                 and amount.x0 > words[index - 1].x1 + tolerances.row_y
+                                 and (index + 1 == len(words) or
+                                      amount.x1 < words[index + 1].x0 - tolerances.row_y))
+                if left_aligned or right_aligned:
                     owners.append(role)
             if len(owners) != 1:
                 raise OperatorFailure('column_ownership', 'A monetary cell lacks one aligned declared column.')
             roles.append(owners[0])
-        if len([role for role in roles if role in {'debit', 'credit'}]) != 1 or len(roles) != len(set(roles)):
+        if (len(roles) != len(set(roles)) or
+                (set(roles) != set(self.roles) if totals else
+                 len([role for role in roles if role in {'debit', 'credit'}]) != 1)):
             raise OperatorFailure('column_ownership', 'A movement requires exactly one populated debit or credit cell.')
         return tuple(roles)
 
@@ -47,6 +58,6 @@ def observe_column_header(row: Row, tolerances: Tolerances) -> ColumnHeader | No
     roles = tuple(CAPTIONS[word] for word in words[2:])
     if (set(roles) not in ({'debit', 'credit'}, {'debit', 'credit', 'balance'})
             or len(roles) != len(set(roles))
-            or any(b.x0 - a.x1 <= tolerances.token_gap for a, b in zip(row.words, row.words[1:]))):
+            or any(b.x0 - a.x1 <= tolerances.row_y for a, b in zip(row.words, row.words[1:]))):
         raise OperatorFailure('column_ownership', 'Financial column headers are not distinct and complete.')
     return ColumnHeader(row, roles)

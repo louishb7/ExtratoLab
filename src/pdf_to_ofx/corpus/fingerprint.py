@@ -11,7 +11,8 @@ from pdf_to_ofx.application.diagnose import diagnose_analysis
 from pdf_to_ofx.corpus.privacy import counter_codes, technical_code
 from pdf_to_ofx.domain.errors import PDFExtractionError, StatementParseError
 from pdf_to_ofx.domain.evidence import AnalysisStatus, FinancialRole
-from pdf_to_ofx.generic.operators.candidates import date_candidates, document_date_order
+from pdf_to_ofx.generic.operators.candidates import date_candidates, document_date_order, document_period
+from pdf_to_ofx.generic.operators.columns import observe_column_header
 from pdf_to_ofx.generic.operators.context import SUMMARY
 from pdf_to_ofx.generic.operators.geometry import observe_geometry
 from pdf_to_ofx.generic.profile import AmountMode, BalanceMode
@@ -121,7 +122,12 @@ def fingerprint_pdf(path: Path, analysis: StatementAnalysis) -> StructuralFinger
         rows = reconstruct_rows(document)
     except StatementParseError:
         return replace(fingerprint, observation_errors=("rows_unavailable",))
-    scans = [scan_money_regions(row, Tolerances()) for row in rows]
+    decimal_table = False
+    try:
+        decimal_table = any(observe_column_header(row, Tolerances()) for row in rows)
+    except StatementParseError:
+        pass  # A malformed caption must not change the engine verdict.
+    scans = [scan_money_regions(row, Tolerances(), decimal_dot_table=decimal_table) for row in rows]
     currencies = {region.money.currency.code for scan in scans for region in scan.regions if region.money.currency}
     opening = bool(fingerprint.opening_balance_observed)
     closing = bool(fingerprint.closing_balance_observed)
@@ -137,7 +143,8 @@ def fingerprint_pdf(path: Path, analysis: StatementAnalysis) -> StructuralFinger
     errors = []
     try:
         order = document_date_order(rows)
-        fingerprint = replace(fingerprint, date_candidate_count=sum(len(date_candidates(row, order=order)) for row in rows))
+        period = document_period(rows)
+        fingerprint = replace(fingerprint, date_candidate_count=sum(len(date_candidates(row, order=order, period=period)) for row in rows))
     except StatementParseError:
         errors.append("date_candidates_unavailable")
     if fingerprint.money_region_count == 0:

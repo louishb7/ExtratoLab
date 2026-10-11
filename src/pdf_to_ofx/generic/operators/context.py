@@ -22,6 +22,8 @@ from pdf_to_ofx.validation.checkpoints import ConstraintViolation
 SUMMARY = {
     "opening balance": ("opening_balance", FinancialRole.OPENING_BALANCE),
     "closing balance": ("closing_balance", FinancialRole.CLOSING_BALANCE),
+    "beginning balance": ("opening_balance", FinancialRole.OPENING_BALANCE),
+    "ending balance": ("closing_balance", FinancialRole.CLOSING_BALANCE),
     "solde initial": ("opening_balance", FinancialRole.OPENING_BALANCE),
     "solde final": ("closing_balance", FinancialRole.CLOSING_BALANCE),
     "saldo inicial": ("opening_balance", FinancialRole.OPENING_BALANCE),
@@ -61,7 +63,7 @@ def read_financial_context(header: tuple[Row, ...], profile: LayoutProfile,
             declare("period_end", period[1])
             claimed.add(index)
             continue
-        regions = money_regions(row, profile.tolerances)
+        regions = money_regions(row, profile.tolerances, decimal_dot_table=profile.decimal_dot_table)
         label = " ".join(w.text for w in row.words[:regions[0].start]) if regions else row.text
         # An unqualified balance is observed, but has no declared temporal anchor.
         # These are the only two boundary roles supported here; unknown captions
@@ -86,7 +88,7 @@ def read_financial_context(header: tuple[Row, ...], profile: LayoutProfile,
                 other = header[other_index]
                 if other.page != row.page or other.words[0].top - row.words[0].bottom > profile.tolerances.summary_y:
                     break
-                values = money_regions(other, profile.tolerances)
+                values = money_regions(other, profile.tolerances, decimal_dot_table=profile.decimal_dot_table)
                 if (values and values[0].start == 0 and values[-1].end == len(other.words)
                         and all(a.end == b.start for a, b in zip(values, values[1:]))
                         and (len(labels) > 1 and other_index == index + 1
@@ -123,7 +125,7 @@ def read_financial_context(header: tuple[Row, ...], profile: LayoutProfile,
         claimed.update((index, value_index))
     for i, row in enumerate(header):
         if has_financial_signal(row.text) and i not in claimed:
-            regions = money_regions(row, profile.tolerances)
+            regions = money_regions(row, profile.tolerances, decimal_dot_table=profile.decimal_dot_table)
             consumed = {i for region in regions for i in range(region.start, region.end)}
             remaining = " ".join(w.text for i, w in enumerate(row.words) if i not in consumed)
             if not regions or has_financial_signal(remaining) or any(

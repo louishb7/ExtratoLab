@@ -8,6 +8,7 @@ from pdf_to_ofx.domain.errors import StatementParseError
 from pdf_to_ofx.generic.operators.candidates import _flow, _period, _stamp, leading_date
 from pdf_to_ofx.generic.operators.pages import contact_footer_rows, continue_pages
 from pdf_to_ofx.generic.operators.transactions import semantic_candidates
+from pdf_to_ofx.generic.operators.columns import observe_column_header
 from pdf_to_ofx.generic.profile import AmountMode, BalanceMode, DateMode, LayoutProfile
 from pdf_to_ofx.generic.semantics import has_financial_signal, money_regions
 from pdf_to_ofx.generic.structure import Row, Tolerances, reconstruct_rows
@@ -22,7 +23,8 @@ def observe_geometry(document: ExtractedDocument, supplied: LayoutProfile | None
     if framed:
         return framed
     base = LayoutProfile(DateMode.PER_TRANSACTION, AmountMode.SIGNED, BalanceMode.RUNNING,
-                         footer_rows=contact_footer_rows(rows), tolerances=tolerances)
+                         footer_rows=contact_footer_rows(rows), tolerances=tolerances,
+                         decimal_dot_table=any(observe_column_header(row, tolerances) for row in rows))
     candidates = semantic_candidates(rows, base)
     start = next((c.position for c in candidates if c.dates and
                   (c.kind in {"date_heading", "flow"} or c.kind == "content" and c.amounts)), len(candidates))

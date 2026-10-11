@@ -28,6 +28,7 @@ from pdf_to_ofx.generic.parser import StatementContext, read_context
 from pdf_to_ofx.generic.profile import AmountMode, BalanceMode, DateMode, LayoutProfile
 from pdf_to_ofx.generic.provenance import VisualCoverage, canonical_sources
 from pdf_to_ofx.generic.structure import Row, reconstruct_rows
+from pdf_to_ofx.generic.semantics import has_financial_signal
 from pdf_to_ofx.pdf.document import ExtractedDocument
 
 
@@ -96,7 +97,7 @@ def prepare_composition(document: ExtractedDocument, profile: LayoutProfile,
                         *, context: StatementContext | None = None,
                         legacy_context: bool = True) -> CompositionInput:
     original = reconstruct_rows(document, profile.tolerances)
-    coverage = VisualCoverage(original, profile.tolerances)
+    coverage = VisualCoverage(original, profile.tolerances, decimal_dot_table=profile.decimal_dot_table)
     # Contradictory currency evidence is a hard stop before any role search.
     coverage.resolve_currency(context.currency if context is not None else None)
     try:
@@ -118,12 +119,18 @@ def prepare_composition(document: ExtractedDocument, profile: LayoutProfile,
     start = next((c.position for c in candidates if c.dates and (
         c.kind in {"date_heading", "flow"} or c.kind == "content" and c.amounts)), None)
     if start is None:
-        raise OperatorFailure("date_attribution", "No supported full-year dated transaction area was found.")
+        raise OperatorFailure("date_attribution", "No supported dated transaction area was found.")
     # Declarations remain outside transaction segmentation, in the same scope.
     declaration_kinds = {"balance_declaration"} if legacy_context else {"balance_declaration", "monetary_only"}
-    body = tuple(c for c in candidates[start:] if c.kind not in declaration_kinds)
+    final_total = next((c.position for c in candidates[start:] if c.kind == "column_total"), None)
+    if final_total is not None and any(c.amounts or c.dates or has_financial_signal(c.row.text)
+                                     for c in candidates[final_total + 1:]):
+        raise OperatorFailure("transaction_segmentation", "A terminal table total has subsequent financial content.")
+    tail = tuple(c for c in candidates if final_total is not None and c.position > final_total)
+    body = tuple(c for c in candidates[start:] if c.kind not in declaration_kinds
+                 and (final_total is None or c.position <= final_total))
     declarations = tuple(c.row for c in candidates[:start]) + tuple(
-        c.row for c in candidates[start:] if c.kind in declaration_kinds)
+        c.row for c in candidates[start:] if c.kind in declaration_kinds) + tuple(c.row for c in tail)
     observations = observe_money(candidates, coverage)
     domains = ()
     role_evidence = []
@@ -143,6 +150,22 @@ def prepare_composition(document: ExtractedDocument, profile: LayoutProfile,
         raise
     except StatementParseError as error:
         raise OperatorFailure("financial_context", str(error), stage="financial_context") from error
+    for candidate in body:
+        if candidate.kind != "column_total":
+            continue
+        for region, role in zip(candidate.amounts, candidate.column_roles, strict=True):
+            if role == "balance":
+                continue  # A balance in a total row is a checkpoint, not an invented closing balance.
+            field, financial_role = (("credits", FinancialRole.CREDIT_TOTAL) if role == "credit"
+                                     else ("debits", FinancialRole.DEBIT_TOTAL))
+            value = region.money.amount if role == "credit" else region.money.amount.copy_abs().copy_negate()
+            if region.money.amount < 0 or field in totals and totals[field] != value:
+                raise OperatorFailure("column_direction_conflict", "A column total contradicts its declared direction.")
+            totals[field] = value
+            coverage.monetary(candidate.row, region, financial_role)
+            source = coverage.span(candidate.row, region.start, region.end)
+            role_evidence.append(RoleDecision(source, financial_role, "declaration_label", True,
+                                             "declared_column_total", (coverage.span(candidate.column_header.row),)))
     segments = segment_transactions(body, profile)
     sources = [domain.source for domain in domains]
     if (len(sources) != len(set(sources)) or any(s not in coverage.expected or s in coverage.assignments for s in sources)):
@@ -166,7 +189,7 @@ def materialize_composition(prepared: CompositionInput, dated: tuple[DatedSegmen
     if allow_checkpoints:
         checkpoints = tuple(p for p in checkpoints if p.kind == "sparse_checkpoint" or
             p.kind == "daily_balance" and any(r.running_balance is None for r in amounts))
-    coverage = VisualCoverage(prepared.original, profile.tolerances)
+    coverage = VisualCoverage(prepared.original, profile.tolerances, decimal_dot_table=profile.decimal_dot_table)
     coverage.regions = (prepared.scope.region, *prepared.frames)
     for assignment in prepared.declarations:
         coverage.claim(assignment.source, assignment.role, assignment.transaction_index)
@@ -222,7 +245,8 @@ def interpret_composed(document: ExtractedDocument, profile: LayoutProfile,
                             carry_across_pages=profile.carry_date_across_pages)
     amounts = tuple(infer_amount_roles(item.segment, profile) for item in dated)
     directions = tuple(infer_direction(item.segment, roles, profile.amount_mode, prepared.candidates,
-        profile.tolerances, carry_across_pages=profile.carry_date_across_pages)
+        profile.tolerances, carry_across_pages=profile.carry_date_across_pages,
+        require_explicit=profile.decimal_dot_table)
         for item, roles in zip(dated, amounts, strict=True))
     for candidate in prepared.candidates:
         if (candidate.kind == "date_heading" and profile.date_mode == DateMode.GROUPED

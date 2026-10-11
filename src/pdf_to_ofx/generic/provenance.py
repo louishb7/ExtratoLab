@@ -12,7 +12,7 @@ from pdf_to_ofx.validation.coverage import CoverageLedger
 
 
 class VisualCoverage(CoverageLedger):
-    def __init__(self, rows: tuple[Row, ...], tolerances: Tolerances) -> None:
+    def __init__(self, rows: tuple[Row, ...], tolerances: Tolerances, *, decimal_dot_table: bool = False) -> None:
         self.row_indexes: dict[int, tuple[int, int]] = {}
         self.region_ids: dict[int, str] = {}
         counts: dict[int, int] = {}
@@ -22,7 +22,7 @@ class VisualCoverage(CoverageLedger):
         for row in rows:
             counts[row.page] = counts.get(row.page, 0) + 1
             self.row_indexes[id(row)] = (row.page, counts[row.page])
-            scan = scan_money_regions(row, tolerances)
+            scan = scan_money_regions(row, tolerances, decimal_dot_table=decimal_dot_table)
             incomplete = tuple((start, end) for start, end in scan.incomplete
                                if (id(row), start, end) not in separators)
             if incomplete:

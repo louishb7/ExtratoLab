@@ -86,6 +86,9 @@ class MonetaryDomain:
 def infer_control_roles(candidate: RowCandidate, balance_mode: BalanceMode,
                         *, allow_checkpoints: bool = False) -> tuple[ControlRole, ...]:
     """Only declared financial control regions receive control ownership."""
+    if candidate.kind == "column_total" and allow_checkpoints:
+        return tuple(ControlRole(region, FinancialRole.SPARSE_CHECKPOINT)
+                     for region, role in zip(candidate.amounts, candidate.column_roles, strict=True) if role == "balance")
     if candidate.kind == "flow":
         return (ControlRole(candidate.amounts[0], FinancialRole.SUBTOTAL),)
     if candidate.kind == "checkpoint" and allow_checkpoints:

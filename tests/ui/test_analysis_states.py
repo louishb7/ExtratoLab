@@ -60,7 +60,12 @@ def test_failed_analysis_has_distinct_status_and_clears_all_previous_export_stat
     assert window.table.rowCount() == 0
     assert all(label.text() == "—" for label in window.summary_labels.values())
     assert expected in window.status_label.text()
-    assert status.value.upper() in window.analysis_status_label.text()
+    assert status.value.upper() not in window.analysis_status_label.text()
+    assert window.analysis_status_label.text() == {
+        AnalysisStatus.AMBIGUOUS: "Não foi possível interpretar com segurança",
+        AnalysisStatus.UNSUPPORTED: "Não foi possível compreender este formato",
+        AnalysisStatus.INVALID: "Encontramos uma inconsistência no extrato",
+    }[status]
     assert "OFX e CSV bloqueados" in window.export_status_label.text()
     assert "SENSITIVE" not in window.status_label.text()
     assert not window.save_button.isEnabled()

@@ -11,14 +11,20 @@ from pdf_to_ofx.generic.structure import Row, Tolerances
 
 NUMBER = r"(?:0|[1-9][0-9]{0,2}(?:\.[0-9]{3})*|[1-9][0-9]*),[0-9]{2}"
 DOT_NUMBER = r"(?:0|[1-9][0-9]{0,2}(?:,[0-9]{3})*|[1-9][0-9]*)\.[0-9]{2}"
-MONEY = re.compile(rf"(?P<sign>[+-]?)\s*(?:(?P<symbol>R\$|BRL|EUR|USD)\s*)?(?P<number>{NUMBER}|{DOT_NUMBER})(?:\s+(?P<marker>[CD]))?")
+ADDITIONAL_ISO_MONEY_CODES = ("INR", "SGD")
+ISO_MONEY_CODES = ("BRL", "EUR", "USD", *ADDITIONAL_ISO_MONEY_CODES)
+MONEY = re.compile(rf"(?P<sign>[+-]?)\s*(?:(?P<symbol>R\$|{'|'.join(ISO_MONEY_CODES)})\s*)?(?P<number>{NUMBER}|{DOT_NUMBER})(?:\s+(?P<marker>[CD]))?")
+TABLE_MONEY = re.compile(rf"(?P<sign>[+-]?)\s*(?:(?P<symbol>R\$|\$|{'|'.join(ISO_MONEY_CODES)})\s*)?(?P<number>{NUMBER}|{DOT_NUMBER})(?:\s+(?P<marker>[CD]))?")
 # Lexical evidence only: the symbol proves a currency, not a number format or a country.
 # Widening this table belongs to the lexical layer (I2/I3).
-CURRENCY_SYMBOLS = {"R$": Currency("BRL"), **{code: Currency(code) for code in ("BRL", "EUR", "USD")}}
+CURRENCY_SYMBOLS = {"R$": Currency("BRL"), **{code: Currency(code) for code in ISO_MONEY_CODES}}
 NUMERIC_DATE = re.compile(r"([0-9]{2})/([0-9]{2})/([0-9]{4})")
 ISO_DATE = re.compile(r"([0-9]{4})-([0-9]{2})-([0-9]{2})")
 LONG_DATE = re.compile(r"([0-9]{1,2}) de ([a-zç]+) de ([0-9]{4})", re.IGNORECASE)
 SHORT_MONTH_DATE = re.compile(r"([0-9]{1,2}) ([a-zç]{3}) ([0-9]{4})", re.IGNORECASE)
+ENGLISH_MONTHS = dict(zip(("january", "february", "march", "april", "may", "june", "july",
+                          "august", "september", "october", "november", "december"), range(1, 13)))
+ENGLISH_DATE = re.compile(rf"({'|'.join(ENGLISH_MONTHS)}) ([0-9]{{1,2}}),? ([0-9]{{4}})", re.IGNORECASE)
 MONTHS = dict(zip(("janeiro", "fevereiro", "março", "abril", "maio", "junho",
                    "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"), range(1, 13)))
 BALANCE_LABEL = re.compile(r"\bsaldo\s+(inicial|anterior|final|total|disponível|bloqueado|do dia|diário)\b", re.IGNORECASE)
@@ -30,9 +36,12 @@ def parse_date(text: str, *, order: str = "day_first") -> date | None:
     numeric, written = NUMERIC_DATE.fullmatch(text), LONG_DATE.fullmatch(text)
     abbreviated = SHORT_MONTH_DATE.fullmatch(text)
     iso = ISO_DATE.fullmatch(text)
+    english = ENGLISH_DATE.fullmatch(text)
     try:
         if iso:
             return date(int(iso[1]), int(iso[2]), int(iso[3]))
+        if english:
+            return date(int(english[3]), ENGLISH_MONTHS[english[1].casefold()], int(english[2]))
         if numeric:
             day, month = (numeric[1], numeric[2]) if order == "day_first" else (numeric[2], numeric[1])
             return date(int(numeric[3]), int(month), int(day))
@@ -53,10 +62,12 @@ class Money:
     explicit_sign: bool
     # Observed currency only; ``None`` is "not demonstrated by this token".
     currency: Currency | None = None
+    # New lexical conventions supply magnitude, never an implicit credit sign.
+    requires_direction_owner: bool = False
 
 
-def parse_money(text: str) -> Money | None:
-    match = MONEY.fullmatch(text)
+def parse_money(text: str, *, decimal_dot_table: bool = False) -> Money | None:
+    match = (TABLE_MONEY if decimal_dot_table else MONEY).fullmatch(text)
     if match is None:
         return None
     sign, marker = match["sign"], match["marker"]
@@ -66,15 +77,16 @@ def parse_money(text: str) -> Money | None:
     if re.fullmatch(NUMBER, number):
         canonical = number.replace(".", "").replace(",", ".")
     else:
-        # Dot decimals require an explicit supported ISO prefix in this version.
-        # Bare dot numbers remain refusal cues, never interpreted as references.
-        if match["symbol"] not in {"BRL", "EUR", "USD"}:
+        # Dot decimals require an ISO prefix or the explicit table lexical mode.
+        # That mode recognizes magnitude; direction still needs its own owner.
+        if not decimal_dot_table and match["symbol"] not in ISO_MONEY_CODES:
             return None
         canonical = number.replace(",", "")
     amount = Decimal(canonical)
     if sign == "-" or marker == "D":
         amount = amount.copy_negate()
-    return Money(amount, marker, bool(sign), CURRENCY_SYMBOLS.get(match["symbol"]))
+    return Money(amount, marker, bool(sign), CURRENCY_SYMBOLS.get(match["symbol"]),
+                 decimal_dot_table or match["symbol"] in ADDITIONAL_ISO_MONEY_CODES)
 
 
 @dataclass(frozen=True, slots=True)
@@ -97,7 +109,7 @@ class MoneyScan:
     incomplete: tuple[tuple[int, int], ...]
 
 
-def scan_money_regions(row: Row, tolerances: Tolerances) -> MoneyScan:
+def scan_money_regions(row: Row, tolerances: Tolerances, *, decimal_dot_table: bool = False) -> MoneyScan:
     """Do not expose a valid suffix of an unsupported monetary expression.
 
     Integers alone are not money. A nearby numeric fragment or affix, however,
@@ -113,7 +125,7 @@ def scan_money_regions(row: Row, tolerances: Tolerances) -> MoneyScan:
             words = row.words[index:end]
             if any(b.x0 - a.x1 > tolerances.token_gap for a, b in zip(words, words[1:])):
                 continue
-            money = parse_money(" ".join(word.text for word in words))
+            money = parse_money(" ".join(word.text for word in words), decimal_dot_table=decimal_dot_table)
             if money is not None:
                 found = MoneyRegion(index, end, money, words[0].x0, words[-1].x1)
                 break
@@ -139,7 +151,8 @@ def scan_money_regions(row: Row, tolerances: Tolerances) -> MoneyScan:
 
     for region in regions:
         start, end = region.start, region.end
-        explicit_start = region.money.explicit_sign or any(row.words[start].text.startswith(prefix) for prefix in CURRENCY_SYMBOLS)
+        explicit_start = region.money.explicit_sign or any(row.words[start].text.startswith(prefix)
+            for prefix in (*CURRENCY_SYMBOLS, *(("$",) if decimal_dot_table else ())))
         while start and start - 1 not in covered and adjacent(start - 1, start):
             previous = start - 1
             # A separated reference before +amount/R$amount is description.
@@ -169,7 +182,7 @@ def scan_money_regions(row: Row, tolerances: Tolerances) -> MoneyScan:
             following = next(region for region in regions if region.start <= index + 1 < region.end)
             incomplete.append((index, following.end))
         if index not in covered and (
-                re.match(r"[+-]?(?:BRL|EUR|USD)[0-9]", word.text)
+                re.match(rf"[+-]?(?:{'|'.join(ISO_MONEY_CODES)})[0-9]", word.text)
                 or word.text.lstrip("+-") in CURRENCY_SYMBOLS and index + 1 < len(row.words)
                 and index + 1 not in covered and re.match(r"[+−-]?[0-9]", row.words[index + 1].text)):
             incomplete.append((index, min(index + 2, len(row.words))))
@@ -189,8 +202,8 @@ def scan_money_regions(row: Row, tolerances: Tolerances) -> MoneyScan:
     return MoneyScan(tuple(complete), tuple(merged))
 
 
-def money_regions(row: Row, tolerances: Tolerances) -> tuple[MoneyRegion, ...]:
-    return scan_money_regions(row, tolerances).regions
+def money_regions(row: Row, tolerances: Tolerances, *, decimal_dot_table: bool = False) -> tuple[MoneyRegion, ...]:
+    return scan_money_regions(row, tolerances, decimal_dot_table=decimal_dot_table).regions
 
 
 def has_financial_signal(text: str) -> bool:

@@ -210,8 +210,66 @@ labels remain hashed. Date observations use the same declared calendar evidence
 as the engine without choosing a financial interpretation. New failure clusters
 are visible while raw content remains excluded.
 
-Remaining limits include unsupported monetary affixes, unspecified precision,
-right-aligned debit/credit cells, more than one occupied flow column, missing
+At the end of cycle 02, limits included unsupported monetary affixes, unspecified
+precision, right-aligned debit/credit cells, more than one occupied flow column, missing
 page captions, booking/value-date ownership, booked/pending scope composition
 and new automatic cross-page description attachment. Independent controls, exact
 coverage, bounded search and export readiness still gate every approval/export.
+
+
+## Cycle 03 external development comparison
+
+Use the existing analyzer and evaluation schemas; never upload financial contents
+or treat another parser output as truth. The 55-PDF local collection remains
+ignored and its original bytes/hashes are unchanged. Preserve the original V1
+baseline; adding later independent expectations belongs in a separate evaluated
+copy, not an overwritten baseline.
+
+| Measure | Before | After | Denominator/limitation |
+| --- | ---: | ---: | --- |
+| Documents / input errors | 55 / 0 | 55 / 0 | same 55 unique SHA-256 documents |
+| SUCCESS / UNSUPPORTED | 0 / 55 | 2 / 53 | status alone does not prove correctness |
+| Correct approvals | 0 | 2 | two reviewed valid expectations |
+| Incorrect approvals | 0 | 0 | no unverified successes; rejection correctness mostly unknown |
+| False rejections | 2 | 0 | retrospectively evaluated on the same two frozen expectations |
+| Observed valid coverage | 0/2 | 2/2 | development subset, not all external documents |
+
+Final conservative scope: A=2 reviewed valid/elegible, B=12 financially incomplete
+structural examples, C=3 other financial categories, D=2 mixed demonstrations,
+E=0 without extractable text, F=36 needing human classification/reference review.
+C+D=5 are outside the declared bank-statement denominator. Complete semantic
+classification of all documents is not established.
+
+Two caption/layout variants from SyntheticBank gained support through generic
+right-edge ownership, exact table decimal magnitudes, English named periods,
+unique short-date calendar occurrences and verified terminal totals. They are
+variants of one external collection, not three independent source families.
+Expected finances were prepared separately using inspected generator semantics,
+Poppler bbox and layout projections, complete movement/balance/total checks, then
+compared through the existing financial signature evaluator. The random source
+ledger is unavailable; preparation occurred during development, not a blind
+acceptance test, and no second human audit was performed. Truth and original PDFs
+stay local and are excluded from deliverables.
+
+Final first blockers are 36 monetary_token_incomplete, eight column_ownership,
+eight date_attribution and one visual_structure. Improved first stages expose
+later blockers without implying financial validity. Sectioned flow tables,
+compound headers, unsupported affixes/precision, dual dates, multiple scopes,
+monetary summaries and watermark-damaged geometry require further evidence-driven
+work. The 12 NoUpload generator examples print absolute amounts without direction;
+do not reconstruct signs from balancing arithmetic alone.
+
+The optional `decimal_dot_table` profile field is a lexical convention, not a
+currency/direction assertion. False remains omitted from historical JSON output.
+Automatic inference admits it only after observing complete flow columns;
+manual profiles still require a signed/marked/group/column direction owner.
+New INR/SGD magnitudes carry the same requirement outside table mode, including
+legacy/oracle entry points; a new currency cannot inherit an implicit credit sign.
+Dollar-symbol currency stays unknown. Total balance is a checkpoint, never an
+invented closing balance. Thus these new approvals are CSV-ready, not OFX-ready.
+
+Linux/Python 3.12 regression and offscreen UI were exercised. Native Windows,
+Python 3.13, actual FAT/exFAT/network-share publication and Athenas remain
+acceptance work. An existing CI matrix is an execution recipe, not execution
+proof. No external PDF or truth is committed, and no new collection-specific
+parser or evaluation subsystem was created.

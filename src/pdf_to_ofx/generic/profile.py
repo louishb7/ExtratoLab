@@ -39,11 +39,13 @@ class LayoutProfile:
     repeated_header_rows: int = 0
     trailing_note_rows: int = 0
     same_page_continuations: bool = False
+    decimal_dot_table: bool = False
 
     def __post_init__(self) -> None:
         if (not isinstance(self.date_mode, DateMode) or not isinstance(self.amount_mode, AmountMode)
                 or not isinstance(self.balance_mode, BalanceMode) or not isinstance(self.tolerances, Tolerances)
                 or type(self.carry_date_across_pages) is not bool or type(self.same_page_continuations) is not bool
+                or type(self.decimal_dot_table) is not bool
                 or type(self.footer_rows) is not int or self.footer_rows < 0
                 or type(self.movement_column) is not int):
             raise ValueError("Invalid structural layout profile.")
@@ -74,6 +76,8 @@ class LayoutProfile:
         # Preserve byte-for-byte serialization of historical profiles.
         if not self.same_page_continuations:
             fields.pop("same_page_continuations")
+        if not self.decimal_dot_table:
+            fields.pop("decimal_dot_table")
         return json.dumps({"version": 1, **fields}, ensure_ascii=True, sort_keys=True)
 
     @classmethod
@@ -83,6 +87,7 @@ class LayoutProfile:
             required = {"date_mode", "amount_mode", "balance_mode"}
             allowed = required | {"version", "movement_column", "balance_column", "carry_date_across_pages", "footer_rows", "tolerances"}
             allowed |= {"transaction_left", "continuation_left", "repeated_header_rows", "trailing_note_rows", "same_page_continuations"}
+            allowed.add("decimal_dot_table")
             if (not isinstance(fields, dict) or not required <= fields.keys()
                     or not fields.keys() <= allowed or type(fields.get("version", 1)) is not int
                     or fields.get("version", 1) != 1):

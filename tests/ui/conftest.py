@@ -3,6 +3,7 @@
 from collections.abc import Iterator
 
 import pytest
+from PySide6.QtCore import QCoreApplication, QEvent
 from PySide6.QtWidgets import QApplication
 
 from pdf_to_ofx.ui.main_window import MainWindow
@@ -27,4 +28,8 @@ def window(qapp: QApplication) -> Iterator[MainWindow]:
     yield window
     window.close()
     window.deleteLater()
+    # processEvents alone does not dispatch DeferredDelete without a running
+    # outer event loop. Destroy GUI objects on their owning thread before the
+    # next test starts a worker that may trigger Python garbage collection.
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
     qapp.processEvents()

@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, replace
 
-from pdf_to_ofx.generic.operators.candidates import DateCandidate, OperatorFailure, _flow, _period, date_candidates, document_date_order
+from pdf_to_ofx.generic.operators.candidates import DateCandidate, OperatorFailure, _flow, _period, date_candidates, document_date_order, document_period
 from pdf_to_ofx.generic.operators.columns import ColumnHeader, observe_column_header
 from pdf_to_ofx.generic.profile import LayoutProfile
 from pdf_to_ofx.generic.semantics import MoneyRegion, balance_labels, has_financial_signal, money_regions
@@ -29,11 +29,12 @@ class TransactionSegment:
 def semantic_candidates(rows: tuple[Row, ...], profile: LayoutProfile) -> tuple[RowCandidate, ...]:
     output = []
     order = document_date_order(rows)
+    period = document_period(rows)
     header = None
     declared_roles = None
     for position, row in enumerate(rows):
-        dates = date_candidates(row, order=order)
-        amounts = money_regions(row, profile.tolerances)
+        dates = date_candidates(row, order=order, period=period)
+        amounts = money_regions(row, profile.tolerances, decimal_dot_table=profile.decimal_dot_table)
         kind = "content"
         observed = observe_column_header(row, profile.tolerances)
         if observed:
@@ -43,6 +44,10 @@ def semantic_candidates(rows: tuple[Row, ...], profile: LayoutProfile) -> tuple[
             kind = "column_header"
         elif _period(row):
             kind = "period"
+        elif (header is not None and header.row.page == row.page and not dates and amounts
+              and ' '.join(w.text for w in row.words[:amounts[0].start]).casefold() == 'total'
+              and abs(row.words[0].x0 - header.row.words[1].x0) <= profile.tolerances.row_y):
+            kind = "column_total"
         elif len(amounts) == 1 and amounts[0].start == 0 and amounts[0].end == len(row.words):
             kind = "monetary_only"
         elif (len(amounts) == 1 and amounts[0].end == len(row.words)
@@ -54,11 +59,16 @@ def semantic_candidates(rows: tuple[Row, ...], profile: LayoutProfile) -> tuple[
               (dates[0].end == len(row.words) or
                balance_labels(" ".join(w.text for w in row.words[dates[0].end:])) in (("do dia",), ("diário",)))):
             kind = "date_heading"
+        elif row.text.casefold().startswith(("opening balance", "closing balance", "beginning balance", "ending balance")):
+            kind = "balance_declaration"
         elif row.text.casefold().startswith("saldo ") and balance_labels(row.text) in (
                 ("inicial",), ("anterior",), ("final",), ("total",)):
             kind = "balance_declaration"
         roles = ()
         owner = None
+        if kind == "column_total":
+            roles = header.bind(amounts, profile.tolerances, totals=True)
+            owner = header
         if header is not None and kind == "content" and dates and amounts:
             if header.row.page != row.page:
                 raise OperatorFailure("column_ownership", "A new page requires its own financial column header.")
@@ -81,7 +91,7 @@ def segment_transactions(candidates: tuple[RowCandidate, ...], profile: LayoutPr
         if row.page != previous_page and not profile.carry_date_across_pages:
             active = False
         previous_page = row.page
-        if candidate.kind in {"date_heading", "flow", "checkpoint", "column_header"}:
+        if candidate.kind in {"date_heading", "flow", "checkpoint", "column_header", "column_total"}:
             active = False
             continue
         if candidate.kind != "content":

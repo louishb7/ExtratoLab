@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 
 from pdf_to_ofx.domain.errors import StatementParseError
 from pdf_to_ofx.generic.semantics import (
-    ISO_DATE, LONG_DATE, NUMERIC_DATE, SHORT_MONTH_DATE, has_financial_signal, money_regions, parse_date,
+    ENGLISH_DATE, ISO_DATE, LONG_DATE, NUMERIC_DATE, SHORT_MONTH_DATE, has_financial_signal, money_regions, parse_date,
 )
 from pdf_to_ofx.generic.structure import Row, Tolerances
 
@@ -35,10 +35,32 @@ class DateCandidate:
     end: int
 
 
-def date_candidates(row: Row, *, order: str = "day_first") -> tuple[DateCandidate, ...]:
+SHORT_DATE = re.compile(r"([0-9]{1,2})/([0-9]{1,2})")
+
+
+def partial_date(text: str, period: tuple[date, date], order: str) -> date | None:
+    """A missing year needs exactly one calendar occurrence in the declared period."""
+    match = SHORT_DATE.fullmatch(text)
+    if match is None:
+        return None
+    start, end = period
+    # A wide period cannot safely provide a missing year or an unbounded scan.
+    if end.year - start.year > 1:
+        raise OperatorFailure("date_attribution", "A partial date lacks a bounded unique year.")
+    numeric = f'{int(match[1]):02}/{int(match[2]):02}'
+    values = [value for year in range(start.year, end.year + 1)
+              if (value := parse_date(f'{numeric}/{year}', order=order)) is not None and start <= value <= end]
+    if len(values) != 1:
+        raise OperatorFailure("date_attribution", "A partial date lacks one occurrence in the declared period.")
+    return values[0]
+
+
+def date_candidates(row: Row, *, order: str = "day_first", period: tuple[date, date] | None = None) -> tuple[DateCandidate, ...]:
     candidates = []
     for start in range(len(row.words)):
-        for count, pattern in ((1, NUMERIC_DATE), (1, ISO_DATE), (5, LONG_DATE), (3, SHORT_MONTH_DATE)):
+        if start == 0 and period is not None and SHORT_DATE.fullmatch(row.words[0].text):
+            candidates.append(DateCandidate(partial_date(row.words[0].text, period, order), 0, 1))
+        for count, pattern in ((1, NUMERIC_DATE), (1, ISO_DATE), (5, LONG_DATE), (3, SHORT_MONTH_DATE), (3, ENGLISH_DATE)):
             end = start + count
             text = " ".join(w.text for w in row.words[start:end])
             if pattern.fullmatch(text):
@@ -65,7 +87,7 @@ WRITTEN_PERIOD = re.compile(
 )
 
 def _has_date(text: str) -> bool:
-    return any(pattern.search(text) for pattern in (NUMERIC_DATE, ISO_DATE, LONG_DATE, SHORT_MONTH_DATE))
+    return any(pattern.search(text) for pattern in (NUMERIC_DATE, ISO_DATE, LONG_DATE, SHORT_MONTH_DATE, ENGLISH_DATE))
 
 def _stamp(row: Row) -> bool:
     return re.match(r"^(?:extrato|documento) gerado (?:em|(?:no )?dia)\b", row.text, re.IGNORECASE) is not None
@@ -77,6 +99,20 @@ INTERNATIONAL_PERIOD = re.compile(
     r"(?:statement period|period|période):\s*([0-9]{2}/[0-9]{2}/[0-9]{4}|[0-9]{4}-[0-9]{2}-[0-9]{2})"
     r"\s+(?:to|au)\s+([0-9]{2}/[0-9]{2}/[0-9]{4}|[0-9]{4}-[0-9]{2}-[0-9]{2})", re.IGNORECASE,
 )
+ENGLISH_PERIOD = re.compile(
+    r"(?:statement period:\s*)?([A-Za-z]+ [0-9]{1,2},? [0-9]{4})\s+(?:to|through|[-–])\s+"
+    r"([A-Za-z]+ [0-9]{1,2},? [0-9]{4})"
+    r"(?:\s+(?:Printed on|Created on|Generated:) [A-Za-z]+ [0-9]{1,2},? [0-9]{4}"
+    r" (?:at )?[0-9]{1,2}:[0-9]{2} [AP]M)?",
+    re.IGNORECASE,
+)
+
+
+def document_period(rows: tuple[Row, ...]) -> tuple[date, date] | None:
+    periods = {period for row in rows if (period := _period(row)) is not None}
+    # Historical page/context readers own conflicting full-year declarations.
+    # They cannot provide a missing year; do not change their failure category.
+    return next(iter(periods)) if len(periods) == 1 else None
 
 
 def _international_period(match: re.Match) -> tuple[tuple[date, date], str]:
@@ -106,10 +142,30 @@ def document_date_order(rows: tuple[Row, ...]) -> str:
             orders.add("day_first")
     if len(orders) > 1:
         raise OperatorFailure("date_convention_ambiguous", "Declared calendar conventions conflict.")
+    period = document_period(rows)
+    short = [row.words[0].text for row in rows if SHORT_DATE.fullmatch(row.words[0].text)]
+    if period and short:
+        possible = []
+        for order in orders or {"day_first", "month_first"}:
+            try:
+                for text in short:
+                    partial_date(text, period, order)
+            except OperatorFailure:
+                continue
+            possible.append(order)
+        if len(possible) != 1:
+            raise OperatorFailure("date_convention_ambiguous", "Partial dates do not prove one calendar convention.")
+        return possible[0]
     return next(iter(orders), "day_first")
 
 
 def _period(row: Row) -> tuple[date, date] | None:
+    english = ENGLISH_PERIOD.fullmatch(row.text)
+    if english:
+        start, end = parse_date(english[1]), parse_date(english[2])
+        if start is None or end is None or start > end:
+            raise OperatorFailure("date_attribution", "Invalid written calendar period.")
+        return start, end
     international = INTERNATIONAL_PERIOD.fullmatch(row.text)
     if international:
         return _international_period(international)[0]

@@ -231,6 +231,8 @@ class GenericStatementParser:
             if description.casefold().startswith("saldo ") and balance_labels(description):
                 raise StatementParseError("A balance heading cannot be interpreted as a transaction.")
             movement = regions[profile.movement_column].money
+            if movement.requires_direction_owner and not (movement.explicit_sign or movement.marker):
+                raise StatementParseError("A new monetary magnitude lacks explicit direction evidence.")
             if ((profile.amount_mode == AmountMode.SIGNED and movement.marker is not None)
                     or (profile.amount_mode == AmountMode.CREDIT_DEBIT_MARKER and movement.marker is None)):
                 raise StatementParseError("Transaction direction does not match the structural profile.")

@@ -25,7 +25,7 @@ class DirectionEvidence:
 
 def infer_direction(segment: TransactionSegment, roles: AmountRoles, mode: AmountMode,
                     candidates: tuple[RowCandidate, ...], tolerances: Tolerances,
-                    *, carry_across_pages: bool) -> DirectionEvidence:
+                    *, carry_across_pages: bool, require_explicit: bool = False) -> DirectionEvidence:
     head = segment.rows[0]
     if head.column_header is not None:
         index = head.amounts.index(roles.movement)
@@ -43,6 +43,8 @@ def infer_direction(segment: TransactionSegment, roles: AmountRoles, mode: Amoun
     if mode != AmountMode.GROUP_SUBTOTAL:
         movement = roles.movement
         money = movement.money
+        if (require_explicit or money.requires_direction_owner) and not (money.marker or money.explicit_sign):
+            raise OperatorFailure("direction_inference", "A table magnitude requires an explicit direction owner.")
         basis = "direction_marker" if money.marker else "explicit_sign" if money.explicit_sign else "unsigned_credit_convention"
         return DirectionEvidence(-1 if money.amount.is_signed() else 1, basis, segment.rows[0], movement.start, movement.end)
     current: RowCandidate | None = None

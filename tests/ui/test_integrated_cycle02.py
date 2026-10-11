@@ -84,6 +84,8 @@ def test_long_descriptions_and_extensive_evidence_scroll_without_losing_text(win
         window.load_pdf(synthetic_pdf)
     window.resize(900,600)
     window.table.selectRow(0)
+    window.details_button.setChecked(True)
+    window.technical_button.setChecked(True)
     qapp.processEvents()
     assert window.table.item(0,1).toolTip() == description
     assert description in window.details.toPlainText()

@@ -42,7 +42,7 @@ class LocalDomains:
 def transaction_candidates(prepared: CompositionInput, constraint: LayoutProfile | None,
                            max_local_alternatives: int) -> LocalDomains:
     profile = prepared.profile
-    coverage = VisualCoverage(prepared.original, profile.tolerances)
+    coverage = VisualCoverage(prepared.original, profile.tolerances, decimal_dot_table=profile.decimal_dot_table)
     dates = date_assignment_candidates(prepared.segments, prepared.candidates,
         mode=constraint.date_mode if constraint else None, carry_across_pages=profile.carry_date_across_pages)
     amounts = tuple(amount_role_candidates(s, profile, constraint=constraint) for s in prepared.segments)
@@ -64,7 +64,8 @@ def transaction_candidates(prepared: CompositionInput, constraint: LayoutProfile
                 date_source = coverage.span(dated.source_row.row, dated.candidate.start, dated.candidate.end)
                 try:
                     direction = infer_direction(segment, roles, profile.amount_mode, prepared.candidates,
-                        profile.tolerances, carry_across_pages=profile.carry_date_across_pages)
+                        profile.tolerances, carry_across_pages=profile.carry_date_across_pages,
+                        require_explicit=profile.decimal_dot_table)
                     description = description_intervals(segment,
                         dated.candidate if dated.source_row.position == segment.position else None,
                         reject_balance_heading=direction.basis != 'signed_group_subtotal')

@@ -39,7 +39,7 @@ class ConstraintFacts:
 
 def observe_constraint_facts(prepared: CompositionInput) -> ConstraintFacts:
     """Inventory once; partial checks never mutate the shared coverage ledger."""
-    coverage = VisualCoverage(prepared.original, prepared.profile.tolerances)
+    coverage = VisualCoverage(prepared.original, prepared.profile.tolerances, decimal_dot_table=prepared.profile.decimal_dot_table)
     controls = tuple(MonetaryAssignment(coverage.span(c.row, control.region.start, control.region.end), control.role)
         for c in prepared.candidates for control in infer_control_roles(c, prepared.profile.balance_mode, allow_checkpoints=True))
     sources = tuple(coverage.span(s.rows[0].row, region.start, region.end) for s in prepared.segments for region in s.rows[0].amounts)
@@ -50,7 +50,8 @@ def observe_constraint_facts(prepared: CompositionInput) -> ConstraintFacts:
             try:
                 candidates.append((region, infer_direction(segment, AmountRoles(region, region.money.amount.copy_abs(), None),
                     prepared.profile.amount_mode, prepared.candidates, prepared.profile.tolerances,
-                    carry_across_pages=prepared.profile.carry_date_across_pages)))
+                    carry_across_pages=prepared.profile.carry_date_across_pages,
+                    require_explicit=prepared.profile.decimal_dot_table)))
             except OperatorFailure:
                 continue
         directions.append(tuple(candidates))

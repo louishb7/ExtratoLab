@@ -85,7 +85,7 @@ class MainWindow(QMainWindow):
         self.content_scroll.setWidget(central)
         self.setCentralWidget(self.content_scroll)
 
-        title = QLabel("ExtratoLab  /  Conferência financeira")
+        title = QLabel("ExtratoLab  /  Abrir · Visualizar · Exportar")
         title.setObjectName("brand")
         font = title.font()
         font.setPointSize(font.pointSize() + 6)
@@ -97,11 +97,14 @@ class MainWindow(QMainWindow):
         layout.addWidget(privacy)
 
         actions = QHBoxLayout()
-        self.select_button = QPushButton("Abrir PDF")
+        self.select_button = QPushButton("Abrir extrato")
         self.select_button.clicked.connect(self.select_pdf)
         actions.addWidget(self.select_button)
         actions.addWidget(QLabel("ou arraste um único PDF para esta janela"))
         actions.addStretch()
+        self.details_button = QPushButton("Detalhes e dados OFX")
+        self.details_button.setCheckable(True)
+        actions.addWidget(self.details_button)
         self.save_button = QPushButton("Salvar OFX")
         self.save_button.setEnabled(False)
         self.save_button.clicked.connect(self.save_ofx)
@@ -116,9 +119,9 @@ class MainWindow(QMainWindow):
         form = QFormLayout(self.metadata_group)
         form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapAllRows)
         self.metadata_fields = {}
-        for key, caption in (("organization", "Instituição (ORG)"), ("institution_id", "Identificador (FID)"),
-                             ("bank_id", "Banco (BANKID)"), ("branch_id", "Agência (BRANCHID)"),
-                             ("account_id", "Conta (ACCTID)")):
+        for key, caption in (("organization", "Instituição"), ("institution_id", "Identificador da instituição"),
+                             ("bank_id", "Código do banco"), ("branch_id", "Agência"),
+                             ("account_id", "Conta")):
             field = QLineEdit()
             field.setMinimumHeight(30)
             field.setAccessibleName(caption)
@@ -127,7 +130,8 @@ class MainWindow(QMainWindow):
             form.addRow(caption, field)
         self.account_type = QComboBox()
         self.account_type.setMinimumHeight(30)
-        self.account_type.addItems(["CHECKING", "SAVINGS"])
+        self.account_type.addItem("Conta corrente", "CHECKING")
+        self.account_type.addItem("Poupança", "SAVINGS")
         self.account_type.currentTextChanged.connect(self._metadata_changed)
         form.addRow("Tipo de conta", self.account_type)
         self.metadata_group.hide()
@@ -185,11 +189,23 @@ class MainWindow(QMainWindow):
         self.details = QTextBrowser()
         self.details.setAccessibleName("Evidências do lançamento")
         self.details.setPlainText("Selecione uma movimentação para conferir os campos e a origem no PDF.")
+        review_panel = QWidget()
+        review_layout = QVBoxLayout(review_panel)
+        self.source_context = QTextBrowser()
+        self.source_context.setAccessibleName("Trecho extraído do PDF")
+        self.source_context.setPlainText("Selecione uma movimentação para consultar o trecho extraído do PDF.")
+        review_layout.addWidget(self.source_context)
+        self.technical_button = QPushButton("Referências técnicas do lançamento")
+        self.technical_button.setCheckable(True)
+        self.technical_button.toggled.connect(self.details.setVisible)
+        review_layout.addWidget(self.technical_button)
+        review_layout.addWidget(self.details)
+        self.details.hide()
         self.diagnostics = QTextBrowser()
         self.diagnostics.setAccessibleName("Verificações financeiras e diagnóstico")
         self.diagnostics.setPlainText("As verificações aparecerão após a análise.")
-        self.tabs.addTab(self.details, "Conferência")
-        self.tabs.addTab(self.diagnostics, "Diagnóstico")
+        self.tabs.addTab(review_panel, "Origem do lançamento")
+        self.tabs.addTab(self.diagnostics, "Verificações automáticas")
         export_panel = QWidget()
         export_layout = QVBoxLayout(export_panel)
         export_note = QLabel("OFX exige dados bancários, moeda resolvida e saldo final. CSV exporta a interpretação aprovada sem dados bancários; campos ausentes ficam vazios. Os metadados valem apenas nesta sessão.")
@@ -205,6 +221,9 @@ class MainWindow(QMainWindow):
         export_scroll.setWidgetResizable(True)
         export_scroll.setWidget(export_panel)
         self.tabs.addTab(export_scroll, "Exportação")
+        self.details_button.toggled.connect(self.tabs.setVisible)
+        self.tabs.currentChanged.connect(lambda index: self.details_button.setChecked(True) if index > 0 else None)
+        self.tabs.hide()
         splitter.addWidget(self.tabs)
         splitter.setSizes([740, 380])
         splitter.setChildrenCollapsible(False)
@@ -246,6 +265,9 @@ class MainWindow(QMainWindow):
         # Clear memory AND visible fields before every attempt, including invalid
         # paths. A failed second conversion cannot export the previous OFX.
         self.review_session = None
+        self.source_context.setPlainText("Selecione uma movimentação para consultar o trecho extraído do PDF.")
+        self.technical_button.setChecked(False)
+        self.details_button.setChecked(False)
         self.details.setPlainText("Selecione uma movimentação para conferir os campos e a origem no PDF.")
         self.diagnostics.setPlainText("As verificações aparecerão após a análise.")
         self.currency_label.setText("Moeda: —")
@@ -344,16 +366,15 @@ class MainWindow(QMainWindow):
             return
         self.analysis = analysis
         self.file_label.setText(path.name)
-        labels = {AnalysisStatus.SUCCESS: "SUCCESS · interpretação aprovada",
-                  AnalysisStatus.AMBIGUOUS: "AMBIGUOUS · interpretação ambígua",
-                  AnalysisStatus.UNSUPPORTED: "UNSUPPORTED · capacidade estrutural ausente",
-                  AnalysisStatus.INVALID: "INVALID · inconsistência identificada"}
-        self.analysis_status_label.setText("Análise: " + labels[analysis.status])
+        labels = {AnalysisStatus.SUCCESS: "Extrato interpretado e verificado",
+                  AnalysisStatus.AMBIGUOUS: "Não foi possível interpretar com segurança",
+                  AnalysisStatus.UNSUPPORTED: "Não foi possível compreender este formato",
+                  AnalysisStatus.INVALID: "Encontramos uma inconsistência no extrato"}
+        self.analysis_status_label.setText(labels[analysis.status])
         self.diagnostics.setPlainText(diagnostic_text(analysis))
         if analysis.status != AnalysisStatus.SUCCESS:
             self.export_status_label.setText("OFX e CSV bloqueados: a interpretação não foi aprovada.")
-            self._error(diagnostic_text(analysis).splitlines()[0])
-            self.tabs.setCurrentIndex(1)
+            self.status_label.setText(diagnostic_text(analysis))
             return
         self.csv_button.setEnabled(assess_csv_readiness(analysis).status == ExportStatus.READY_TO_EXPORT)
         self._show_result(analysis)
@@ -379,7 +400,12 @@ class MainWindow(QMainWindow):
         if (self.analysis is None or self.analysis.statement is None or self.review_session is None
                 or row < 0 or not self.table.selectedItems()):
             self.details.setPlainText("Selecione uma movimentação para conferir os campos e a origem no PDF.")
+            self.source_context.setPlainText("Selecione uma movimentação para consultar o trecho extraído do PDF.")
             return
+        original = self.review_session.original_rows(row)
+        self.source_context.setPlainText("Trecho extraído do PDF (contexto textual):\n\n" +
+            ("\n".join(f"Página {page}: {text}" for page, text in original)
+             if original else "O trecho original não está disponível nesta sessão."))
         transaction = self.analysis.statement.transactions[row]
         currency = self.analysis.statement.currency
         lines = [transaction.posting_date.isoformat(), transaction.description,
@@ -412,7 +438,7 @@ class MainWindow(QMainWindow):
             return
         self.export_metadata = OFXProfile(
             **{key: field.text().strip() for key, field in self.metadata_fields.items()},
-            account_type=self.account_type.currentText(),
+            account_type=self.account_type.currentData(),
         )
         self._refresh_export()
 
@@ -433,6 +459,7 @@ class MainWindow(QMainWindow):
         elif status != ExportStatus.READY_TO_EXPORT:
             self.status_label.setText("Extrato interpretado. " + ofx_text)
         else:
+            self.metadata_group.hide()
             try:
                 ofx = export_analysis(self.analysis, self.export_metadata)
             except OFXGenerationError:
@@ -442,7 +469,7 @@ class MainWindow(QMainWindow):
                 return
             self.conversion_result = ConversionResult(self.analysis.bank_name, self.analysis.statement, ofx)
             self.save_button.setEnabled(True)
-            self.status_label.setText("Conversão pronta. Revise os lançamentos e escolha Salvar OFX.")
+            self.status_label.setText("Movimentações prontas. Escolha Salvar OFX ou Salvar CSV.")
 
     def _show_result(self, result: StatementAnalysis) -> None:
         statement = result.statement

@@ -123,37 +123,32 @@ rerun `python -m pip install -e ".[test]"`; old editable installs can reference 
 previous directory. During development, `PYTHONPATH=src python -m pdf_to_ofx.ui`
 also works on Linux without reinstalling.
 
-1. **Abrir PDF** or drag one local PDF onto the window. Interactive analysis runs
-   in one Qt worker. Opening another document clears the old session immediately;
-   only the newest request may update the interface. A newer request waits for
-   the active worker rather than starting unbounded parallel work.
-2. Review the period, explicit currency, transaction count, credit/debit counts
-   and sums, and available boundary balances. Missing values stay visibly absent.
-   The analysis state (SUCCESS, AMBIGUOUS, UNSUPPORTED or INVALID) remains visible
-   independently of export readiness. At smaller resolutions or scaled DPI, the
-   window content scrolls; its minimum size is 900×600 logical pixels.
-3. Select a table row using the mouse or keyboard. **Conferência** shows the
-   interpreted values, debit/credit basis and original page/line/token references.
-   Resolution uses one session cache over the already extracted document; no PDF
-   re-extraction occurs when selecting another row. Missing field evidence is
-   clearly identified. Registered page/line/token intervals remain visible even
-   when the original tokens are unavailable. Clearing the selection clears its
-   contextual evidence. The table is read-only and keeps document order.
-4. **Diagnóstico** distinguishes verified, unavailable and inapplicable controls
-   and explains rejection categories without printing raw internal reasons.
-5. In **Exportação**, supply institution name/ID, bank ID, branch, account and
-   CHECKING/SAVINGS type only when OFX requires them. The form scrolls in smaller
-   windows. Readiness is reassessed on edits. Existing document identity cannot be
-   contradicted; account metadata cannot supply a currency or missing balance.
-   Metadata lives only in the session and is cleared on every new analysis.
-   The tab reports CSV and OFX readiness separately and explains missing currency,
-   missing closing balance, invalid identity or a contradiction with the PDF.
-6. **Salvar OFX** uses the existing generator and FITID rules. **Salvar CSV** uses
-   the same approved interpretation gate, independently of OFX account metadata
-   and its closing-balance requirement. Both actions use native dialogs, refuse
-   existing files and publish complete files atomically. Unsupported hard-link
-   filesystems (including FAT32/exFAT and some network shares) fail safely with a
-   retryable error; no unsafe fallback is used.
+1. Use **Abrir extrato**, or drag one PDF into the window. Analysis runs in one
+   Qt worker. A new document clears the previous session immediately; only the
+   newest request may update the interface.
+2. Read the financial summary and movement table. Human-readable messages explain
+   approval or a blocking characteristic. Missing values remain visibly absent.
+   Details are initially hidden; the table is the primary workspace. Content
+   scrolls at smaller resolutions/DPI; the minimum is 900×600 logical pixels.
+3. **Detalhes e dados OFX → Origem do lançamento** shows the original extracted
+   text rows for the selected movement using the session cache. This is textual
+   context, not a rendered PDF page or a complete visual comparison experience.
+   **Referências técnicas do lançamento** reveals field provenance and token
+   intervals on demand. Selection does not re-extract the PDF.
+4. **Verificações automáticas** explains verified, unavailable and inapplicable
+   controls. Verification remains automatic; no user checkbox can approve an
+   unsupported interpretation.
+5. **Exportação** requests bank identity only when OFX needs it. Safely extracted
+   identity avoids the form. Account type uses human labels; the underlying OFX
+   values remain CHECKING/SAVINGS. Metadata is session-only, cannot contradict
+   document identity, and cannot supply a currency or missing financial balance.
+6. **Salvar OFX** preserves generator/FITID rules. **Salvar CSV** requires an
+   approved interpretation independently of OFX identity and closing balance.
+   Both refuse existing files and publish complete files atomically. Hard links
+   are preferred; unsupported hard links can fall back to native exclusive
+   rename on Windows or Linux `renameat2(RENAME_NOREPLACE)`. Unavailable native
+   support fails closed. FAT/exFAT and network shares still need native acceptance
+   tests; no overwriting POSIX rename or check-then-replace fallback is used.
 
 CSV v1 is UTF-8 without BOM, comma-delimited with LF record separators, ISO
 `YYYY-MM-DD` dates, signed cent values with a decimal dot, and stable headers
@@ -897,3 +892,41 @@ python tests/fixtures/international/generate.py /local/new-adversarial-directory
 pdf-to-ofx corpus analyze /local/new-adversarial-directory/corpus.jsonl -o /local/adversarial.jsonl
 pdf-to-ofx corpus report /local/adversarial.jsonl --json
 ```
+
+
+## Cycle 03 external development corpus
+
+The local, ignored external corpus contains 55 PDFs from five collections, not
+55 verified valid bank statements. Its immutable pre-change baseline was zero
+approvals, 55 unsupported analyses and no input errors. After structural changes,
+exactly the same 55 SHA-256 documents yield two approvals and 53 unsupported
+analyses. The two approvals match separately prepared expectations from inspected
+source-generator semantics and two Poppler text projections (18 movements,
+running balances and totals). The original random ledgers were unavailable;
+this was development review, not a blind test or independent human audit.
+
+The two documents exercise distinct caption/column-layout variants of one
+external collection. They do not demonstrate three independent external families
+or real-bank/Athenas compatibility. Only these two have reviewed valid financial
+expectations. The remaining scope inventory is 12 incomplete structural examples,
+three other financial categories, two mixed demonstrations and 36 cases requiring
+human classification/reference review. No measured false approvals or lost correct
+approvals occurred; semantic accuracy on the unverified cases is unknown.
+
+New generic capabilities are exact INR/SGD prefixes, right-edge debit/credit cell
+ownership, bounded English written periods, unique in-period years for short
+slash dates, and complete terminal column totals with independent controls.
+Bare dot decimals/dollar magnitudes require a complete observed debit/credit
+header in automatic inference. A magnitude never supplies direction in this new
+lexical mode. New INR/SGD magnitudes also require an explicit direction owner
+outside table mode, including legacy/oracle entry points. `$` never proves USD. A total-row balance supplies a checkpoint,
+not a closing declaration. Both newly approved documents allow CSV; missing
+currency and declared closing balance keep OFX blocked.
+
+Limits still include compound/sectioned headers, missing directional evidence,
+multiple accounts, booking/value-date ownership, monetary explanatory regions,
+watermark-damaged extraction and unsupported affixes/date forms. Search budgets,
+legacy oracles, FITID rules and dependencies remain unchanged. Windows and
+Python 3.13 execution, actual FAT/exFAT publication and Athenas import remain
+unverified. Corpus files, financial expectations and document excerpts remain
+local and ignored; only sanitized evidence belongs in a handoff.

@@ -35,3 +35,16 @@ class ReviewSession:
         words = self.rows.get((span.basis, span.page, span.row))
         tokens = words[span.word_start:span.word_end] if words is not None and span.word_end <= len(words) else None
         return ResolvedSource(span, tokens)
+
+    def original_rows(self, index: int) -> tuple[tuple[int, str], ...]:
+        """Whole original extracted rows, in source order, without re-extraction.
+
+        This is textual context, not a rendered PDF or a reconstructed value.
+        """
+        source = self.transaction_source(index)
+        if source is None:
+            return ()
+        spans = (*source.spans, *source.description_sources, source.date_source, source.amount_source)
+        keys = sorted({(s.basis, s.page, s.row) for s in spans if s is not None}, key=lambda k: (k[1], k[2], k[0]))
+        return tuple((page, " ".join(self.rows[basis, page, row]))
+                     for basis, page, row in keys if (basis, page, row) in self.rows)
